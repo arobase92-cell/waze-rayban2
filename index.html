@@ -1,40 +1,385 @@
-<!DOCTYPE html>
+     <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=640, initial-scale=1.0">
-  <title>Waze — Ray-Ban Display</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap');
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Waze HUD — Ray-Ban Display</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap');
 
-    :root {
-      --bg: #0a0c0f;
-      --surface: #111418;
-      --waze-blue: #00d4ff;
-      --waze-cyan: #00ffcc;
-      --waze-warn: #ff6b35;
-      --text: #e8f4f8;
-      --muted: #4a6070;
-      --border: #1e2d3a;
-    }
+        :root {
+            --bg: #050709;
+            --surface: #10151b;
+            --surface2: #151d26;
+            --waze-blue: #00d4ff;
+            --waze-cyan: #00ffcc;
+            --text: #eef8ff;
+            --muted: #7d93a5;
+            --border: #223140;
+            --success: #00ff99;
+        }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    html, body {
-      width: 640px;
-      height: 200px;
-      overflow: hidden;
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Rajdhani', sans-serif;
-    }
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 24px; /* Légèrement réduit pour compenser le zoom */
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+            touch-action: manipulation;
+            zoom: 1.2; /* Adapté pour micro-display */
+        }
 
-    /* ── ÉCRAN PRINCIPAL ── */
-    #app {
-      width: 640px;
-      height: 200px;
-      display: flex;
-      flex-direction: column;
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #app {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ========================= TOPBAR ========================== */
+        #topbar {
+            height: 65px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 18px;
+            background: var(--surface);
+            border-bottom: 2px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        #logo {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: var(--waze-blue);
+            text-transform: uppercase;
+        }
+
+        #status-bar {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 18px;
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--muted);
+        }
+
+        #gps-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #555;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+
+        #gps-dot.active {
+            background: var(--success);
+            box-shadow: 0 0 12px var(--success);
+        }
+
+        /* ========================= MAIN ========================== */
+        #main {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+        }
+
+        /* ========================= MAP (CORRIGÉ) ========================== */
+        #map-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+        }
+
+        /* Correction du débordement : conteneur calibré pour le scale */
+        #map-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            filter: contrast(1.15) brightness(1.08) saturate(1.15);
+        }
+
+        /* ========================= PANEL ========================== */
+        #panel {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 14px;
+            background: var(--bg);
+            border-left: 2px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .panel-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .label {
+            font-size: 16px;
+            letter-spacing: 2px;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        #destination-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+            background: var(--surface2);
+            color: var(--text);
+            font-size: 20px;
+            font-family: 'Rajdhani', sans-serif;
+            outline: none;
+        }
+
+        #destination-input:focus {
+            border-color: var(--waze-blue);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.35);
+        }
+
+        #destination-input::placeholder {
+            color: #4a5a6a;
+        }
+
+        #nav-btn {
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--waze-blue), var(--waze-cyan));
+            color: #001018;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: transform 0.15s ease, background 0.3s;
+        }
+
+        #nav-btn:active {
+            transform: scale(0.97);
+        }
+
+        #coords-display {
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            font-size: 16px;
+            line-height: 1.6;
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--waze-cyan);
+        }
+
+        /* ========================= SPLASH ========================== */
+        #splash {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            z-index: 100;
+        }
+
+        #splash-title {
+            font-size: 42px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            color: var(--waze-blue);
+        }
+
+        #splash-sub {
+            font-size: 16px;
+            letter-spacing: 4px;
+            color: var(--muted);
+        }
+
+        .loader {
+            width: 200px;
+            height: 4px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #111;
+        }
+
+        .loader-bar {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(to right, var(--waze-blue), var(--waze-cyan));
+            animation: load 1.8s ease forwards;
+        }
+
+        @keyframes load {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="splash">
+        <div id="splash-title">Waze HUD</div>
+        <div id="splash-sub">Meta Ray-Ban Display</div>
+        <div class="loader">
+            <div class="loader-bar"></div>
+        </div>
+    </div>
+
+    <div id="app" style="display:none">
+        <div id="topbar">
+            <div id="logo">⬡ WAZE</div>
+            <div id="status-bar">
+                <div id="gps-dot"></div>
+                <span id="gps-text">GPS...</span>
+                <span id="clock">--:--</span>
+            </div>
+        </div>
+
+        <div id="main">
+            <div id="map-container">
+                <iframe id="waze-frame" src="https://embed.waze.com/fr/iframe?zoom=16&lat=48.8566&lon=2.3522&pin=0" allowfullscreen></iframe>
+            </div>
+
+            <div id="panel">
+                <div class="panel-section">
+                    <div class="label">Destination</div>
+                    <input id="destination-input" type="text" placeholder="Ex: Paris, Lyon..." />
+                    <button id="nav-btn">▶ Naviguer</button>
+                </div>
+                <div class="panel-section">
+                    <div class="label">Position</div>
+                    <div id="coords-display">
+                        <div id="lat-display">LAT: —</div>
+                        <div id="lon-display">LON: —</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let userLat = 48.8566;
+        let userLon = 2.3522;
+        let isNavigating = false;
+
+        // =========================
+        // SPLASH SCREEN
+        // =========================
+        setTimeout(() => {
+            document.getElementById('splash').style.style.display = 'none'; // Sécurité syntaxe
+            document.getElementById('splash').remove(); // Nettoie le DOM pour les performances
+            document.getElementById('app').style.display = 'flex';
+            initGPS();
+        }, 1800);
+
+        // =========================
+        // HORLOGE
+        // =========================
+        function updateClock() {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('clock').textContent = `${hh}:${mm}`;
+        }
+        updateClock();
+        setInterval(updateClock, 10000);
+
+        // =========================
+        // GEOLOCALISATION (GPS)
+        // =========================
+        function initGPS() {
+            if (!navigator.geolocation) {
+                document.getElementById('gps-text').textContent = 'NO GPS';
+                return;
+            }
+
+            navigator.geolocation.watchPosition(
+                position => {
+                    userLat = position.coords.latitude;
+                    userLon = position.coords.longitude;
+                    
+                    document.getElementById('gps-dot').classList.add('active');
+                    document.getElementById('gps-text').textContent = 'GPS OK';
+                    document.getElementById('lat-display').textContent = `LAT ${userLat.toFixed(5)}`;
+                    document.getElementById('lon-display').textContent = `LON ${userLon.toFixed(5)}`;
+                    
+                    // On ne rafraîchit pas la carte en permanence si l'utilisateur navigue déjà (évite les rechargements d'iframe)
+                    if (!isNavigating) {
+                        updateMap(userLat, userLon);
+                    }
+                },
+                error => {
+                    document.getElementById('gps-text').textContent = 'GPS FAIL';
+                    document.getElementById('gps-dot').classList.remove('active');
+                    console.error(error);
+                },
+                { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+            );
+        }
+
+        // =========================
+        // ROUTAGE ET IFRAME WAZE
+        // =========================
+        function updateMap(lat, lon, query = "") {
+            let src = `https://embed.waze.com/fr/iframe?zoom=16&lat=${lat}&lon=${lon}`;
+            
+            if (query) {
+                // Astuce Waze Embed : on force la recherche via le paramètre q
+                src += `&q=${encodeURIComponent(query)}&pin=1&navigate=yes`;
+            } else {
+                src += `&pin=0`;
+            }
+            
+            document.getElementById('waze-frame').src = src;
+        }
+
+        // =========================
+        // ACTIONS
+        // =========================
+        function navigate() {
+            const destination = document.getElementById('destination-input').value.trim();
+            if (!destination) return;
+
+            isNavigating = true;
+            updateMap(userLat, userLon, destination);
+
+            const btn = document.getElementById('nav-btn');
+            btn.textContent = '✓ EN ROUTE';
+            btn.style.background = 'linear-gradient(135deg, #00ff99, #00ffcc)';
+        }
+
+        document.getElementById('nav-btn').addEventListener('click', navigate);
+        document.getElementById('destination-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') { navigate(); }
+        });
+    </script>
+</body>
+</html> flex-direction: column;
     }
 
     /* ── BARRE SUPÉRIEURE ── */
