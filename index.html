@@ -1,15 +1,16 @@
-<!DOCTYPE html>
+            left: 15px;
+      <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waze Ray-Ban 2 - HUD Neural Edition</title>
+    <title>HUD GPS - Brioche GP, Voice & Radars</title>
     
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.js"></script>
 
     <style>
-        /* Design HUD Haute Visibilité optimisé pour Meta Display (Fond noir = pixels éteints) */
+        /* Design HUD Tête Haute (Fond noir absolu = transparence sur Meta Display) */
         body, html {
             margin: 0;
             padding: 0;
@@ -18,7 +19,7 @@
             background-color: #000000;
             font-family: 'Consolas', 'Courier New', monospace;
             overflow: hidden;
-            color: #00ffcc; /* Cyan/Vert fluo pour l'extérieur */
+            color: #00ffcc; /* Cyan/Vert fluo haute visibilité */
         }
 
         #map {
@@ -27,15 +28,294 @@
             bottom: 0;
             width: 100%;
             height: 100%;
-            opacity: 0.80; /* Fusionne la carte avec l'environnement réel */
+            opacity: 0.75;
         }
 
-        /* Overlay HUD */
-        .hud-container {
+        /* Interface utilisateur globale */
+        .hud-ui {
             position: absolute;
             top: 15px;
             left: 15px;
             right: 15px;
+            bottom: 20px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .hud-header {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ffcc;
+            border-radius: 6px;
+            padding: 12px;
+            pointer-events: auto;
+        }
+
+        .hud-header input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #00ffcc;
+            font-size: 18px;
+            font-weight: bold;
+            font-family: inherit;
+            outline: none;
+        }
+
+        /* Bandeau d'alerte Radar / Danger (Flash Rouge) */
+        .radar-alert {
+            display: none; /* Masqué par défaut */
+            background: rgba(255, 0, 0, 0.95);
+            border: 3px solid #ffffff;
+            color: #ffffff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            animation: flash 0.6s infinite alternate;
+        }
+
+        /* Indicateurs et trackers annexes */
+        .side-panels {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .voice-status {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff3333;
+            color: #ff3333;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: none;
+            animation: pulse 1.2s infinite;
+        }
+
+        .gp-tracker {
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px dashed #ffaa00;
+            color: #ffaa00;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .hud-footer {
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #00ffcc;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+            align-self: center;
+            font-weight: bold;
+        }
+
+        /* Animations HUD */
+        @keyframes flash {
+            0% { background: rgba(255, 0, 0, 0.95); box-shadow: 0 0 10px #ff0000; }
+            100% { background: rgba(100, 0, 0, 0.95); box-shadow: 0 0 25px #ff0000; }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div class="hud-ui">
+        <div>
+            <div class="hud-header">
+                <input type="text" id="destination-input" placeholder="[ PRESSER LA POIGNÉE POUR DICTER ]" readonly>
+            </div>
+            
+            <div id="radar-alert" class="radar-alert">⚠️ ZONE DE CONTRÔLE VITESSE ⚠️</div>
+            
+            <div class="side-panels" style="margin-top: 10px;">
+                <div id="gp-tracker" class="gp-tracker">BRIOCHE GP : PRÊT</div>
+                <div id="voice-status" class="voice-status">● MICRO ACTIF / PARLEZ</div>
+            </div>
+        </div>
+
+        <div class="hud-footer" id="hud-footer">GPS RADAR SYSTEM : ONLINE</div>
+    </div>
+
+    <script>
+        // CONFIGURATION INITIALE
+        mapboxgl.accessToken = 'VOTRE_TOKEN_MAPBOX_ICI';
+        const BOUTON_COMMODO = 'Enter'; // Touche émise par la poignée Brioche GP
+        const RAYON_ALERTE_METRES = 400; // Distance de déclenchement de l'alerte radar
+
+        // Base de données locale de test (Exemple : Zones de danger à Paris)
+        // Remplacer ou alimenter avec vos coordonnées GeoJSON réelles
+        const zonesDanger = [
+            { id: 1, name: "Radar Fixe A86", lng: 2.3522, lat: 48.8566 }, // Centre Paris pour test
+            { id: 2, name: "Zone de Contrôle Périphérique", lng: 2.2945, lat: 48.8584 } // Proche Tour Eiffel
+        ];
+
+        // Initialisation de la carte (Mode Navigation Nuit)
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/dark-v11', 
+            center: [2.3522, 48.8566], 
+            zoom: 14,
+            pitch: 55, // Effet perspective 3D motard
+            bearing: 0
+        });
+
+        // Curseur de votre position GPS réelle
+        const gpsMarker = new mapboxgl.Marker({ color: '#00ffcc' })
+            .setLngLat([2.3522, 48.8566])
+            .addTo(map);
+
+        // Éléments d'interface
+        const destInput = document.getElementById('destination-input');
+        const voiceStatus = document.getElementById('voice-status');
+        const gpTracker = document.getElementById('gp-tracker');
+        const hudFooter = document.getElementById('hud-footer');
+        const radarAlertBox = document.getElementById('radar-alert');
+
+        // Générateur d'alerte sonore (Audio Context System pour éviter de charger des fichiers .mp3 lourds)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function emettreBipAlerte() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Fréquence aiguë (Bip)
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.15); // Durée du bip : 150ms
+        }
+
+        // --- MOTEUR DE DICTÉE VOCALE ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'fr-FR';
+            recognition.continuous = false;
+
+            recognition.onstart = () => {
+                isListening = true;
+                voiceStatus.style.display = 'block';
+                hudFooter.innerText = "ÉCOUTE EN COURS...";
+            };
+
+            recognition.onresult = (event) => {
+                const adresseDictee = event.results[0][0].transcript;
+                destInput.value = adresseDictee;
+                rechercherDestination(adresseDictee);
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                voiceStatus.style.display = 'none';
+                resetHUDDelayed();
+            };
+        }
+
+        // --- ACTIONNEUR BRIOCHE GP ---
+        let isListening = false;
+        window.addEventListener('keydown', (event) => {
+            gpTracker.innerText = `COMMODO CODE : "${event.key}"`;
+            
+            if (event.key === BOUTON_COMMODO) {
+                event.preventDefault();
+                if (!isListening && recognition) {
+                    recognition.start();
+                }
+            }
+        });
+
+        // --- MOTEUR DE SURVEILLANCE DES RADARS (GÉOFENCING) ---
+        // Cette fonction doit être appelée à chaque fois que votre position GPS change
+        function verifierProximiteRadars(maLng, maLat) {
+            let alerteActive = false;
+
+            zonesDanger.forEach(zone => {
+                const distance = calculerDistance(maLat, maLng, zone.lat, zone.lng);
+                
+                // Si vous êtes à moins de 400 mètres d'une zone enregistrée
+                if (distance <= RAYON_ALERTE_METRES) {
+                    alerteActive = true;
+                    radarAlertBox.innerText = `⚠️ CONTROLE : ${zone.name.toUpperCase()} (${Math.round(distance)}m) ⚠️`;
+                }
+            });
+
+            if (alerteActive) {
+                if (radarAlertBox.style.display !== 'block') {
+                    radarAlertBox.style.display = 'block';
+                    emettreBipAlerte(); // Déclenche le son dans les lunettes
+                }
+            } else {
+                radarAlertBox.style.display = 'none';
+            }
+        }
+
+        // Formule mathématique de Haversine pour calculer la distance exacte en mètres entre deux coordonnées GPS
+        function calculerDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Rayon de la Terre en mètres
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; 
+        }
+
+        // --- GEOLOCALISATION EN TEMPS RÉEL (Simulation de conduite) ---
+        // Sur route réelle, remplacez par : navigator.geolocation.watchPosition(...)
+        map.on('move', () => {
+            const centreCarte = map.getCenter();
+            gpsMarker.setLngLat(centreCarte);
+            // Vérifie les radars à chaque déplacement sur la carte
+            verifierProximiteRadars(centreCarte.lng, centreCarte.lat);
+        });
+
+        // Appel API Geocoding de Mapbox
+        function rechercherDestination(adresse) {
+            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(adresse)}.json?access_token=${mapboxgl.accessToken}&country=FR&limit=1`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.features && data.features.length > 0) {
+                        const coords = data.features[0].geometry.coordinates;
+                        map.flyTo({ center: coords, zoom: 15, essential: true });
+                        gpsMarker.setLngLat(coords);
+                        hudFooter.innerText = "NAV : " + data.features[0].place_name.toUpperCase();
+                    } else {
+                        hudFooter.innerText = "DESTINATION INTROUVABLE";
+                    }
+                });
+        }
+
+        function resetHUDDelayed() {
+            setTimeout(() => {
+                if (!isListening) {
+                    hudFooter.innerText = "GPS RADAR SYSTEM : ONLINE";
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+      right: 15px;
             bottom: 20px;
             pointer-events: none;
             display: flex;
