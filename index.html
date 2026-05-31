@@ -3,16 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waze HUD Dynamique — Mode Voiture</title>
+    <title>Waze HUD — Navigation & Radars</title>
     <style>
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background-color: #000;
-            color: #33ff33; /* Vert HUD haute visibilité */
+            color: #33ff33; /* Vert HUD */
             font-family: Arial, sans-serif;
             width: 600px;
             height: 600px;
@@ -22,19 +18,23 @@
             justify-content: space-between;
             padding: 40px;
         }
-        .top-bar { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
+        .top-bar { display: flex; justify-content: space-between; align-items: center; }
+        .speedometer { font-size: 5rem; font-weight: 900; }
+        .speed-unit { font-size: 1.5rem; vertical-align: super; }
+        
+        /* Alerte Radar Style Waze */
+        .radar-alert {
+            background-color: #ff3333;
+            color: #000;
+            font-weight: bold;
+            padding: 12px 25px;
+            border-radius: 30px;
+            font-size: 1.6rem;
+            display: none; /* Caché par défaut */
+            animation: blink 0.8s infinite;
+            box-shadow: 0 0 20px #ff3333;
         }
-        .speedometer { 
-            font-size: 5rem; 
-            font-weight: 900; 
-        }
-        .speed-unit { 
-            font-size: 1.5rem; 
-            vertical-align: super; 
-        }
+
         .voice-status {
             background-color: #222;
             color: #33ccff;
@@ -47,34 +47,17 @@
         .voice-status.listening {
             background-color: #ff3333;
             color: #000;
-            animation: pulse 1s infinite;
+            animation: blink 1s infinite;
         }
-        .navigation-main { 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-        }
-        .turn-arrow { 
-            font-size: 8rem; 
-        }
-        .bottom-bar { 
-            text-align: center; 
-        }
-        .next-step { 
-            font-size: 2.2rem; 
-            font-weight: bold; 
-            color: #ffffff; 
-            margin-bottom: 5px; 
-        }
-        .street-name { 
-            font-size: 1.6rem; 
-            color: #33ccff; 
-            text-transform: uppercase; 
-        }
+        .navigation-main { display: flex; justify-content: center; align-items: center; }
+        .turn-arrow { font-size: 8rem; text-shadow: 0 0 20px #33ff33; }
+        .bottom-bar { text-align: center; }
+        .next-step { font-size: 2.2rem; font-weight: bold; color: #ffffff; margin-bottom: 5px; }
+        .street-name { font-size: 1.6rem; color: #33ccff; text-transform: uppercase; }
 
-        @keyframes pulse {
+        @keyframes blink {
             0% { opacity: 1; }
-            50% { opacity: 0.5; }
+            50% { opacity: 0.2; }
             100% { opacity: 1; }
         }
     </style>
@@ -83,7 +66,8 @@
 
     <div class="top-bar">
         <div class="speedometer"><span id="speed">0</span><span class="speed-unit">km/h</span></div>
-        <div id="voiceBtn" class="voice-status">🎤 Prêt (cliquez)</div>
+        <div id="radarZone" class="radar-alert">⚠️ RADAR <span id="radarDist"></span></div>
+        <div id="voiceBtn" class="voice-status">🎤 Destination</div>
     </div>
 
     <div class="navigation-main">
@@ -91,17 +75,142 @@
     </div>
 
     <div class="bottom-bar">
-        <div id="distance" class="next-step">En attente de destination</div>
-        <div id="destination" class="street-name">Dictez une adresse...</div>
+        <div id="distance" class="next-step">En attente...</div>
+        <div id="destination" class="street-name">Cliquez sur le micro</div>
     </div>
 
     <script>
-        // 1. GESTION DE LA DICTÉE VOCALE (Web Speech API)
+        const MAPBOX_TOKEN = 'VOTRE_CLE_API_MAPBOX'; 
+
         const voiceBtn = document.getElementById('voiceBtn');
         const destinationText = document.getElementById('destination');
         const distanceText = document.getElementById('distance');
         const arrowText = document.getElementById('arrow');
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const radarZone = document.getElementById('radarZone');
+        const radarDist = document.getElementById('radarDist');
         
-        if (Speech
+        let userLog = 0; let userLat = 0;
+        let listeRadars = [];
+
+        // Audio context pour générer un "bip" d'alerte sans fichier externe
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function biper() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.value = 880; // Note aiguë
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); gain.gain.setValueAtTime(1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            osc.stop(audioCtx.currentTime + 0.4);
+        }
+
+        // 1. GÉOLOCALISATION & SURVEILLANCE RADAR
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition((position) => {
+                userLog = position.coords.longitude;
+                userLat = position.coords.latitude;
+                
+                const speedKmh = position.coords.speed ? Math.round(position.coords.speed * 3.6) : 0;
+                document.getElementById('speed').textContent = speedKmh;
+
+                // Charger les radars aux alentours une fois qu'on a la position initiale
+                if(listeRadars.length === 0) chargerRadarsLocaux(userLat, userLog);
+
+                // Vérifier si un radar est proche à chaque mouvement
+                verifierProximiteRadars();
+            }, (err) => console.error(err), { enableHighAccuracy: true });
+        }
+
+        // 2. RÉCUPÉRATION DES RADARS VIA OPENSTREETMAP (Overpass API)
+        async function chargerRadarsLocaux(lat, lon) {
+            // Cherche les radars (speed_camera) dans un rayon de 15km autour du véhicule
+            const query = `[out:json];node["highway"="speed_camera"](around:15000,${lat},${lon});out;`;
+            const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                listeRadars = data.elements;
+                console.log(`${listeRadars.length} radars chargés dans la zone.`);
+            } catch (e) { console.error("Erreur chargement radars", e); }
+        }
+
+        // 3. CALCUL DE DISTANCE (Formule de Haversine)
+        function calculerDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Rayon de la Terre en mètres
+            const phi1 = lat1 * Math.PI/180;
+            const phi2 = lat2 * Math.PI/180;
+            const deltaPhi = (lat2-lat1) * Math.PI/180;
+            const deltaLambda = (lon2-lon1) * Math.PI/180;
+            const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function verifierProximiteRadars() {
+            let alerteActive = false;
+            let distanceMin = 999999;
+
+            listeRadars.forEach(radar => {
+                const dist = calculerDistance(userLat, userLog, radar.lat, radar.lon);
+                if (dist < distanceMin) distanceMin = dist;
+            });
+
+            // Se déclenche si un radar est à moins de 500 mètres
+            if (distanceMin <= 500) {
+                if (radarZone.style.display !== 'block') biper(); // Bip à l'entrée de zone
+                radarZone.style.display = 'block';
+                radarDist.textContent = `${Math.round(distanceMin)}m`;
+            } else {
+                radarZone.style.display = 'none';
+            }
+        }
+
+        // 4. RECONNAISSANCE VOCALE (Inchangée)
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'fr-FR';
+            voiceBtn.addEventListener('click', () => recognition.start());
+            
+            recognition.onstart = () => { voiceBtn.textContent = "🛑 Écoute..."; voiceBtn.classList.add('listening'); };
+            recognition.onresult = async (event) => {
+                const adresseDictee = event.results[0][0].transcript;
+                destinationText.textContent = adresseDictee;
+                distanceText.textContent = "Calcul de l'itinéraire...";
+                recupererItineraire(adresseDictee);
+            };
+            recognition.onend = () => { voiceBtn.textContent = "🎤 Destination"; voiceBtn.classList.remove('listening'); };
+        }
+
+        // 5. NAVIGATION MAPBOX (Inchangée)
+        async function recupererItineraire(adresse) {
+            try {
+                const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(adresse)}.json?access_token=${MAPBOX_TOKEN}&country=FR&limit=1`;
+                const geoResponse = await fetch(geocodeUrl); const geoData = await geoResponse.json();
+                if (!geoData.features || geoData.features.length === 0) return;
+                
+                const [destLog, destLat] = geoData.features[0].center;
+                const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${userLog},${userLat};${destLog},${destLat}?steps=true&language=fr&access_token=${MAPBOX_TOKEN}`;
+                const dirResponse = await fetch(directionsUrl); const dirData = await dirResponse.json();
+
+                if (dirData.routes && dirData.routes.length > 0) {
+                    mettreAJourHUD(dirData.routes[0].legs[0].steps[0]);
+                }
+            } catch (error) { console.error(error); }
+        }
+
+        function mettreAJourHUD(step) {
+            const distance = step.distance;
+            distanceText.textContent = distance > 1000 ? `Dans ${(distance/1000).toFixed(1)} km` : `Dans ${Math.round(distance)} m`;
+            destinationText.textContent = step.maneuver.instruction;
+            
+            const modifier = step.maneuver.modifier;
+            if (step.maneuver.type.includes("turn") && modifier) {
+                if (modifier.includes("right")) arrowText.textContent = "➔";
+                else if (modifier.includes("left")) arrowText.textContent = "⬅︎";
+            } else { arrowText.textContent = "⬆️"; }
+        }
+    </script>
+</body>
+</html>
