@@ -3,118 +3,162 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>HUD Navigation</title>
+<title>Universal Navigation Router</title>
 
 <style>
 html, body {
     margin: 0;
     padding: 0;
-    width: 100%;
     height: 100%;
-    overflow: hidden;
+    width: 100%;
     background: #000;
     font-family: Arial, sans-serif;
+    overflow: hidden;
     color: white;
     touch-action: manipulation;
 }
 
-/* HUD container */
-#hud {
+#app {
     display: flex;
     flex-direction: column;
     height: 100%;
 }
 
-/* Top bar */
-#topbar {
-    height: 70px;
+#bar {
     display: flex;
-    align-items: center;
     padding: 10px;
     background: #111;
     box-sizing: border-box;
 }
 
-/* Input */
-#destination {
+#input {
     flex: 1;
     height: 45px;
-    font-size: 16px; /* important anti-zoom mobile */
-    border: none;
+    font-size: 16px;
     border-radius: 10px;
+    border: none;
     padding: 10px;
     outline: none;
 }
 
-/* Button */
-#goBtn {
+#btn {
     margin-left: 10px;
-    height: 45px;
     padding: 0 15px;
     border: none;
     border-radius: 10px;
-    background: #00c853;
-    color: black;
+    background: #00e676;
     font-weight: bold;
 }
 
-/* Main display */
-#screen {
+#status {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: #666;
     text-align: center;
     font-size: 14px;
-    color: #666;
 }
 </style>
 </head>
 
 <body>
 
-<div id="hud">
+<div id="app">
 
-    <div id="topbar">
-        <input id="destination" placeholder="Destination..." />
-        <button id="goBtn">GO</button>
+    <div id="bar">
+        <input id="input" placeholder="Destination..." />
+        <button id="btn">GO</button>
     </div>
 
-    <div id="screen">
+    <div id="status">
         En attente de navigation...
     </div>
 
 </div>
 
 <script>
-const input = document.getElementById("destination");
-const btn = document.getElementById("goBtn");
+const input = document.getElementById("input");
+const btn = document.getElementById("btn");
+const status = document.getElementById("status");
+
+// -----------------------------
+// DEVICE DETECTION SIMPLE
+// -----------------------------
+function isIOS() {
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function isAndroid() {
+    return /Android/i.test(navigator.userAgent);
+}
+
+function isWebView() {
+    return /(WebView|wv)/i.test(navigator.userAgent);
+}
+
+// -----------------------------
+// NAVIGATION ENGINE
+// -----------------------------
+function buildLinks(dest) {
+    const encoded = encodeURIComponent(dest);
+
+    return {
+        wazeApp: `waze://?q=${encoded}&navigate=yes`,
+        googleMapsApp: `google.navigation:q=${encoded}`,
+        appleMaps: `http://maps.apple.com/?q=${encoded}`,
+        webFallback: `https://waze.com/ul?q=${encoded}&navigate=yes`,
+        googleWeb: `https://www.google.com/maps/search/?api=1&query=${encoded}`
+    };
+}
 
 function launchNavigation() {
     const dest = input.value.trim();
     if (!dest) return;
 
-    // Deep link app Waze
-    const appLink = `waze://?q=${encodeURIComponent(dest)}&navigate=yes`;
+    const links = buildLinks(dest);
 
-    // Web fallback (toujours fiable)
-    const webLink = `https://waze.com/ul?q=${encodeURIComponent(dest)}&navigate=yes`;
+    status.innerText = "Recherche : " + dest;
 
-    // tentative ouverture app
-    window.location.href = appLink;
+    // -----------------------------
+    // SMART ROUTING
+    // -----------------------------
 
-    // fallback automatique si bloqué (WebView / lunettes / navigateur limité)
-    setTimeout(() => {
-        window.location.href = webLink;
-    }, 1200);
+    // 1. iOS
+    if (isIOS() && !isWebView()) {
+        window.location.href = links.appleMaps;
 
-    document.getElementById("screen").innerText = "Navigation vers : " + dest;
+        setTimeout(() => {
+            window.location.href = links.googleWeb;
+        }, 1200);
+        return;
+    }
+
+    // 2. Android natif
+    if (isAndroid() && !isWebView()) {
+        window.location.href = links.wazeApp;
+
+        setTimeout(() => {
+            window.location.href = links.googleWeb;
+        }, 1200);
+        return;
+    }
+
+    // 3. WebView / lunettes / frigo / environnements bloqués
+    if (isWebView()) {
+        window.location.href = links.webFallback;
+        return;
+    }
+
+    // 4. Desktop fallback
+    window.location.href = links.googleWeb;
 }
 
-// Click bouton
+// -----------------------------
+// EVENTS
+// -----------------------------
 btn.addEventListener("click", launchNavigation);
 
-// Enter clavier
 input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
         e.preventDefault();
