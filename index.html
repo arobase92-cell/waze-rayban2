@@ -1,35 +1,73 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HUD Waze</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Waze Navigation</title>
     <style>
-        body { margin: 0; background: #000; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; }
-        /* Zone de saisie énorme pour être sûr de pouvoir cliquer dessus avec les lunettes */
-        input { 
-            width: 90%; padding: 60px; font-size: 50px; 
-            border: 10px solid #00d4ff; background: #222; color: #fff; 
-            border-radius: 30px; text-align: center;
+        /* Réinitialisation complète pour éviter les zooms intempestifs */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
         }
-        button { 
-            margin-top: 40px; width: 90%; padding: 60px; font-size: 50px; 
-            background: #00d4ff; border: none; border-radius: 30px; font-weight: bold;
+
+        /* Zone de saisie fixe et bien visible */
+        #search-container {
+            height: 60px;
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            background: #222;
+        }
+
+        #destination-input {
+            width: 100%;
+            height: 40px;
+            font-size: 18px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            padding: 5px;
+            background: #fff;
+            color: #000;
+        }
+
+        /* Zone de navigation */
+        #map-view {
+            flex-grow: 1;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
 
-    <input type="text" id="addressInput" speech x-webkit-speech placeholder="CLIQUEZ ICI POUR PARLER" />
-    
-    <button id="searchBtn" onclick="chercher()">CHERCHER</button>
+    <div id="search-container">
+        <input type="text" id="destination-input" placeholder="Saisir destination..." onkeydown="handleEnter(event)">
+    </div>
+
+    <div id="map-view">
+        <div>Carte en attente de navigation...</div>
+    </div>
 
     <script>
-        function chercher() {
-            const addr = document.getElementById('addressInput').value;
-            if (!addr) return;
-            // Redirection directe vers Waze
-            window.location.href = `https://waze.com/ul?q=${encodeURIComponent(addr)}&navigate=yes`;
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                const dest = document.getElementById('destination-input').value;
+                // Lien universel Waze qui force l'ouverture de l'app native
+                window.location.href = `waze://?q=${encodeURIComponent(dest)}&navigate=yes`;
+            }
         }
     </script>
 </body>
