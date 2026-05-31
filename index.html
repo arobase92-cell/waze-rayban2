@@ -3,272 +3,240 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waze HUD — Version Open Source</title>
+    <title>Waze Ray-Ban 2 - HUD Edition</title>
+    
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.js"></script>
+
     <style>
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-        }
-        body {
-            background-color: #000;
-            color: #33ff33; /* Vert HUD */
-            font-family: Arial, sans-serif;
-            width: 600px;
-            height: 600px;
+        /* Style général optimisé pour un affichage tête haute (HUD) Meta Display */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000; /* Fond noir pour éteindre les pixels inutiles sur les lunettes */
+            font-family: 'Consolas', 'Courier New', monospace;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 40px;
-        }
-        .top-bar { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-        }
-        .speedometer { 
-            font-size: 5rem; 
-            font-weight: 900; 
-        }
-        .speed-unit { 
-            font-size: 1.5rem; 
-            vertical-align: super; 
-        }
-        .radar-alert {
-            background-color: #ff3333;
-            color: #000;
-            font-weight: bold;
-            padding: 12px 25px;
-            border-radius: 30px;
-            font-size: 1.6rem;
-            display: none; 
-            animation: blink 0.8s infinite;
-            box-shadow: 0 0 20px #ff3333;
-        }
-        .voice-status {
-            background-color: #222;
-            color: #33ccff;
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-size: 1.2rem;
-            border: 1px solid #33ccff;
-            cursor: pointer;
-        }
-        .voice-status.listening {
-            background-color: #ff3333;
-            color: #000;
-            animation: blink 1s infinite;
-        }
-        .navigation-main { 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-        }
-        .turn-arrow { 
-            font-size: 8rem; 
-            text-shadow: 0 0 20px #33ff33; 
-        }
-        .bottom-bar { 
-            text-align: center; 
-        }
-        .next-step { 
-            font-size: 2.2rem; 
-            font-weight: bold; 
-            color: #ffffff; 
-            margin-bottom: 5px; 
-        }
-        .street-name { 
-            font-size: 1.6rem; 
-            color: #33ccff; 
-            text-transform: uppercase; 
+            color: #00ffcc; /* Vert fluo / Cyan pour un contraste maximal en extérieur */
         }
 
-        @keyframes blink {
-            0% { opacity: 1; }
-            50% { opacity: 0.2; }
-            100% { opacity: 1; }
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.85; /* Légère transparence pour fusionner avec la réalité */
+        }
+
+        /* Conteneurs de l'interface utilisateur HUD */
+        .hud-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            z-index: 10;
+            pointer-events: none; /* Laisse passer les interactions vers la carte si nécessaire */
+        }
+
+        .search-box {
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #00ffcc;
+            border-radius: 6px;
+            padding: 10px 15px;
+            display: block;
+            pointer-events: auto;
+        }
+
+        .search-box input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #00ffcc;
+            font-size: 16px;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .search-box input::placeholder {
+            color: rgba(0, 255, 204, 0.5);
+        }
+
+        /* Indicateur d'état du Micro (Dictée Vocale) */
+        .mic-indicator {
+            position: absolute;
+            top: 80px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff3333;
+            color: #ff3333;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: none; /* Caché par défaut */
+            animation: pulse 1.5s infinite;
+            z-index: 11;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        /* Instructions système en bas de l'écran */
+        .hud-status {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00ffcc;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
 
-    <div class="top-bar">
-        <div class="speedometer"><span id="speed">0</span><span class="speed-unit">km/h</span></div>
-        <div id="radarZone" class="radar-alert">⚠️ RADAR <span id="radarDist"></span></div>
-        <div id="voiceBtn" class="voice-status">🎤 Destination</div>
+    <div id="map"></div>
+
+    <div class="hud-overlay">
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="[ Geste Neural Band pour dicter ]" readonly>
+        </div>
     </div>
 
-    <div class="navigation-main">
-        <div id="arrow" class="turn-arrow">⬆️</div>
-    </div>
+    <div id="mic-indicator" class="mic-indicator">• ENREGISTREMENT VOCAL...</div>
 
-    <div class="bottom-bar">
-        <div id="distance" class="next-step">En attente...</div>
-        <div id="destination" class="street-name">Cliquez sur le micro et parlez</div>
-    </div>
+    <div class="hud-status" id="hud-status">NEURAL BAND : PRÊT | EN ATTENTE DE GESTE</div>
 
     <script>
-        const voiceBtn = document.getElementById('voiceBtn');
-        const destinationText = document.getElementById('destination');
-        const distanceText = document.getElementById('distance');
-        const arrowText = document.getElementById('arrow');
-        const radarZone = document.getElementById('radarZone');
-        const radarDist = document.getElementById('radarDist');
-        
-        let userLog = 0; 
-        let userLat = 0;
-        let listeRadars = [];
-        let audioCtx = null;
+        // TO-DO: Remplacer par votre propre token Mapbox actif
+        mapboxgl.accessToken = 'VOTRE_TOKEN_MAPBOX_ICI';
 
-        function biper() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sine'; osc.frequency.value = 880; 
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); gain.gain.setValueAtTime(1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-            osc.stop(audioCtx.currentTime + 0.4);
-        }
+        // Initialisation de la carte optimisée pour le HUD (Style sombre / Dark)
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/dark-v11', 
+            center: [2.3522, 48.8566], // Centré par défaut sur Paris
+            zoom: 13,
+            pitch: 45, // Vue en perspective type navigation de conduite
+            bearing: 0
+        });
 
-        // 1. GÉOLOCALISATION GPS
-        if ("geolocation" in navigator) {
-            navigator.geolocation.watchPosition((position) => {
-                userLog = position.coords.longitude;
-                userLat = position.coords.latitude;
-                
-                const speedKmh = position.coords.speed ? Math.round(position.coords.speed * 3.6) : 0;
-                document.getElementById('speed').textContent = speedKmh;
+        // Ajouter un marqueur de position globale
+        const navigationMarker = new mapboxgl.Marker({ color: '#00ffcc' })
+            .setLngLat([2.3522, 48.8566])
+            .addTo(map);
 
-                if(listeRadars.length === 0 && userLat !== 0) chargerRadarsLocaux(userLat, userLog);
-                if(listeRadars.length > 0) verifierProximiteRadars();
-            }, (err) => {
-                console.log("GPS en attente ou fixe. Utilisation d'un point de départ simulé par défaut (Paris).");
-            }, { enableHighAccuracy: true });
-        }
+        // Variables pour la reconnaissance vocale
+        const searchInput = document.getElementById('search-input');
+        const micIndicator = document.getElementById('mic-indicator');
+        const hudStatus = document.getElementById('hud-status');
+        let isListening = false;
 
-        // 2. BASE RADARS (Toujours OpenStreetMap libre)
-        async function chargerRadarsLocaux(lat, lon) {
-            const query = `[out:json];node["highway"="speed_camera"](around:15000,${lat},${lon});out;`;
-            const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-                listeRadars = data.elements;
-            } catch (e) { console.error("Erreur radars open-source", e); }
-        }
-
-        // 3. DISTANCE RADARS
-        function calculerDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3;
-            const phi1 = lat1 * Math.PI/180; const phi2 = lat2 * Math.PI/180;
-            const deltaPhi = (lat2-lat1) * Math.PI/180; const deltaLambda = (lon2-lon1) * Math.PI/180;
-            const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
-                      Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        }
-
-        function verifierProximiteRadars() {
-            let distanceMin = 999999;
-            listeRadars.forEach(radar => {
-                const dist = calculerDistance(userLat, userLog, radar.lat, radar.lon);
-                if (dist < distanceMin) distanceMin = dist;
-            });
-            if (distanceMin <= 500) {
-                if (radarZone.style.display !== 'block') biper(); 
-                radarZone.style.display = 'block';
-                radarDist.textContent = `${Math.round(distanceMin)}m`;
-            } else { radarZone.style.display = 'none'; }
-        }
-
-        // 4. RECONNAISSANCE VOCALE
+        // Configuration de l'API Web Speech
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
         if (SpeechRecognition) {
-            const recognition = new SpeechRecognition();
+            recognition = new SpeechRecognition();
             recognition.lang = 'fr-FR';
+            recognition.continuous = false;
+            recognition.interimResults = false;
 
-            voiceBtn.addEventListener('click', () => {
-                if (audioCtx) audioCtx.resume();
-                recognition.start();
-            });
-            
-            recognition.onstart = () => { voiceBtn.textContent = "🛑 Écoute..."; voiceBtn.classList.add('listening'); };
-            recognition.onresult = async (event) => {
-                const adresseDictee = event.results[0][0].transcript;
-                destinationText.textContent = adresseDictee;
-                distanceText.textContent = "Calcul de l'itinéraire...";
-                recupererItineraire(adresseDictee);
+            recognition.onstart = () => {
+                isListening = true;
+                micIndicator.style.display = 'block';
+                hudStatus.innerText = "DICTÉE EN COURS... PARLEZ NOW";
+                hudStatus.style.borderColor = "#ff3333";
+                hudStatus.style.color = "#ff3333";
+                searchInput.placeholder = "Écoute en cours...";
             };
-            recognition.onend = () => { voiceBtn.textContent = "🎤 Destination"; voiceBtn.classList.remove('listening'); };
+
+            recognition.onresult = (event) => {
+                const resultText = event.results[0][0].transcript;
+                searchInput.value = resultText;
+                hudStatus.innerText = "RECHERCHE : " + resultText.toUpperCase();
+                
+                // Lancer la recherche d'itinéraire / géocodage sur Mapbox
+                executerGeocodage(resultText);
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Erreur Speech:", event.error);
+                hudStatus.innerText = "ERREUR DE DICTÉE : " + event.error.toUpperCase();
+                resetHUDStatusDelayed();
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                micIndicator.style.display = 'none';
+                searchInput.placeholder = "[ Geste Neural Band pour dicter ]";
+                resetHUDStatusDelayed();
+            };
+        } else {
+            hudStatus.innerText = "ERREUR : WEB SPEECH API NON SUPPORTÉE";
         }
 
-        // 5. TRAJET AVEC LE MOTEUR PUBLIC OSRM + API ADRESSE GOV
-        async function recupererItineraire(adresse) {
-            try {
-                // Étape A : Géocodage via l'API ouverte d'État (data.gouv.fr)
-                const geocodeUrl = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(adresse)}&limit=1`;
-                const geoResponse = await fetch(geocodeUrl); 
-                const geoData = await geoResponse.json();
+        // --- GESTION DU NEURAL BAND ---
+        // Le bracelet traduit vos mouvements musculaires/nerveux en événements claviers (ex: Touche Entrée / Raccourci)
+        window.addEventListener('keydown', (event) => {
+            // AJUSTEMENT : Remplacez 'Enter' par la touche émise par votre configuration Neural Band
+            // Si le bracelet envoie un signal spécifique pour "Actionner le micro"
+            if (event.key === 'Enter') { 
+                event.preventDefault(); // Empêche le comportement par défaut d'Android
                 
-                if (!geoData.features || geoData.features.length === 0) {
-                    distanceText.textContent = "Adresse inconnue";
-                    return;
+                if (!isListening && recognition) {
+                    recognition.start();
                 }
-                
-                // L'API adresse.data.gouv renvoie le format [longitude, latitude]
-                const [destLog, destLat] = geoData.features[0].geometry.coordinates;
-
-                // Sécurité de test : Si tu lances le code sur ton PC de bureau (sans puce GPS active),
-                // on injecte des coordonnées de départ par défaut à Paris pour que le calcul OSRM fonctionne
-                let startLog = userLog === 0 ? 2.3522 : userLog;
-                let startLat = userLat === 0 ? 48.8566 : userLat;
-
-                // Étape B : Calcul de la route via l'instance de démo publique OSRM
-                const directionsUrl = `https://router.project-osrm.org/route/v1/driving/${startLog},${startLat};${destLog},${destLat}?steps=true&geometries=geojson`;
-                const dirResponse = await fetch(directionsUrl); 
-                const dirData = await dirResponse.json();
-
-                if (dirData.routes && dirData.routes.length > 0) {
-                    const legs = dirData.routes[0].legs[0];
-                    // On prend la première étape de virage significative
-                    const etapeSuivante = legs.steps[1] || legs.steps[0];
-                    mettreAJourHUD(etapeSuivante);
-                } else {
-                    distanceText.textContent = "Aucun itinéraire trouvé";
-                }
-            } catch (error) { 
-                console.error("Erreur serveurs libres :", error); 
-                distanceText.textContent = "Erreur de connexion";
             }
+        });
+
+        // Fonction pour géocoder l'adresse dictée via l'API Mapbox
+        function executerGeocodage(query) {
+            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=FR&limit=1`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.features && data.features.length > 0) {
+                        const coordinates = data.features[0].geometry.coordinates;
+                        const placeName = data.features[0].place_name;
+
+                        // Centrer la carte sur la destination trouvée
+                        map.flyTo({
+                            center: coordinates,
+                            zoom: 15,
+                            essential: true
+                        });
+
+                        // Déplacer le marqueur
+                        navigationMarker.setLngLat(coordinates);
+                        hudStatus.innerText = "DESTINATION : " + placeName.toUpperCase();
+                    } else {
+                        hudStatus.innerText = "DESTINATION INTROUVABLE";
+                    }
+                })
+                .catch(err => {
+                    console.error("Erreur Geocoding:", err);
+                    hudStatus.innerText = "ERREUR RÉSEAU MAPBOX";
+                });
         }
 
-        // 6. ADAPTATION GRAPHISME HUD
-        function mettreAJourHUD(step) {
-            const distance = step.distance;
-            distanceText.textContent = distance > 1000 ? `Dans ${(distance/1000).toFixed(1)} km` : `Dans ${Math.round(distance)} m`;
-            
-            const modifier = step.maneuver.modifier || "";
-            const type = step.maneuver.type || "";
-            const rue = step.name || "la rue";
-
-            let instructionTexte = "Continuer tout droit";
-
-            if (modifier.includes("right")) {
-                instructionTexte = `Tourner à droite sur ${rue}`;
-                arrowText.textContent = "➔";
-            } else if (modifier.includes("left")) {
-                instructionTexte = `Tourner à gauche sur ${rue}`;
-                arrowText.textContent = "⬅︎";
-            } else if (type.includes("roundabout")) {
-                instructionTexte = `Prendre le rond-point vers ${rue}`;
-                arrowText.textContent = "🔄";
-            } else {
-                instructionTexte = `Suivre la direction ${rue}`;
-                arrowText.textContent = "⬆️";
-            }
-
-            destinationText.textContent = instructionTexte;
+        function resetHUDStatusDelayed() {
+            setTimeout(() => {
+                if (!isListening) {
+                    hudStatus.innerText = "NEURAL BAND : PRÊT | EN ATTENTE DE GESTE";
+                    hudStatus.style.borderColor = "#00ffcc";
+                    hudStatus.style.color = "#00ffcc";
+                }
+            }, 4000);
         }
     </script>
 </body>
