@@ -1,531 +1,285 @@
-            left: 15px;
-      <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HUD GPS - Brioche GP, Voice & Radars</title>
+    <title>HUD GPS Moto - Bluetooth Direct & Radars</title>
     
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.js"></script>
 
     <style>
-        /* Design HUD Tête Haute (Fond noir absolu = transparence sur Meta Display) */
+        /* FOND NOIR ABSOLU = TRANSPARENCE SUR LES VERRES META DISPLAY */
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #000000;
-            font-family: 'Consolas', 'Courier New', monospace;
+            background-color: #000000; 
+            font-family: 'Arial', sans-serif;
             overflow: hidden;
             color: #00ffcc; /* Cyan/Vert fluo haute visibilité */
+            text-align: center;
         }
 
-        #map {
+        .hud-display {
             position: absolute;
             top: 0;
-            bottom: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            opacity: 0.75;
-        }
-
-        /* Interface utilisateur globale */
-        .hud-ui {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            right: 15px;
-            bottom: 20px;
-            pointer-events: none;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            box-sizing: border-box;
+            padding: 20px;
         }
 
-        .hud-header {
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid #00ffcc;
-            border-radius: 6px;
-            padding: 12px;
-            pointer-events: auto;
-        }
-
-        .hud-header input {
-            width: 100%;
-            background: transparent;
+        /* Bouton HUD pour appairer le Bluetooth au démarrage */
+        .bt-connect-btn {
+            background: #ffaa00;
+            color: #000000;
             border: none;
-            color: #00ffcc;
-            font-size: 18px;
+            padding: 15px 30px;
+            font-size: 16px;
             font-weight: bold;
-            font-family: inherit;
-            outline: none;
+            border-radius: 30px;
+            cursor: pointer;
+            pointer-events: auto;
+            margin: 15px auto;
+            display: block;
+            box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
         }
 
-        /* Bandeau d'alerte Radar / Danger (Flash Rouge) */
-        .radar-alert {
-            display: none; /* Masqué par défaut */
-            background: rgba(255, 0, 0, 0.95);
-            border: 3px solid #ffffff;
-            color: #ffffff;
-            border-radius: 6px;
+        /* Zone Supérieure : Instructions / Navigation */
+        .nav-instruction {
+            font-size: 22px;
+            font-weight: bold;
+            text-transform: uppercase;
+            background: rgba(0, 0, 0, 0.85);
             padding: 15px;
-            margin-top: 10px;
-            text-align: center;
+            border-bottom: 2px solid #00ffcc;
+        }
+
+        /* BANDEAU FLASHEUR ROUGE (Prend le dessus en cas de radar proche) */
+        .radar-flash {
+            display: none; /* Masqué par défaut */
+            background: #ff0000;
+            color: #ffffff;
+            font-size: 26px;
+            font-weight: bold;
+            padding: 18px;
+            border-radius: 8px;
+            margin: 10px 0;
+            animation: flashBlink 0.4s infinite alternate;
+        }
+
+        /* Zone Centrale : Vitesse réelle */
+        .speedometer {
+            font-size: 75px;
+            font-weight: 900;
+            color: #00ffcc;
+            margin: 15px 0;
+        }
+        .speed-unit {
             font-size: 20px;
-            font-weight: bold;
-            animation: flash 0.6s infinite alternate;
+            display: block;
+            font-weight: normal;
         }
 
-        /* Indicateurs et trackers annexes */
-        .side-panels {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-        }
-
-        .voice-status {
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid #ff3333;
-            color: #ff3333;
-            padding: 8px 15px;
-            border-radius: 4px;
-            font-weight: bold;
+        /* Indicateur de micro actif */
+        .voice-active {
             display: none;
-            animation: pulse 1.2s infinite;
+            color: #ff3333;
+            font-size: 22px;
+            font-weight: bold;
+            animation: pulse 1s infinite;
         }
 
-        .gp-tracker {
-            background: rgba(0, 0, 0, 0.9);
-            border: 1px dashed #ffaa00;
+        /* Bas de l'écran : Statut de la connexion */
+        .status-bar {
+            font-size: 12px;
             color: #ffaa00;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-        }
-
-        .hud-footer {
-            background: rgba(0, 0, 0, 0.9);
-            border: 1px solid #00ffcc;
-            padding: 10px 20px;
-            border-radius: 4px;
-            font-size: 14px;
-            text-align: center;
-            align-self: center;
             font-weight: bold;
         }
 
-        /* Animations HUD */
-        @keyframes flash {
-            0% { background: rgba(255, 0, 0, 0.95); box-shadow: 0 0 10px #ff0000; }
-            100% { background: rgba(100, 0, 0, 0.95); box-shadow: 0 0 25px #ff0000; }
+        /* Animations */
+        @keyframes flashBlink {
+            0% { background: #ff0000; box-shadow: 0 0 15px #ff0000; }
+            100% { background: #000000; color: #ff0000; box-shadow: 0 0 0px transparent; }
         }
 
         @keyframes pulse {
-            0% { opacity: 0.5; }
+            0% { opacity: 0.4; }
             50% { opacity: 1; }
-            100% { opacity: 0.5; }
+            100% { opacity: 0.4; }
         }
     </style>
 </head>
 <body>
 
-    <div id="map"></div>
+    <div id="map" style="display: none;"></div>
 
-    <div class="hud-ui">
+    <div class="hud-display">
+        <div id="nav-text" class="nav-instruction">
+            [ APPAIREZ VOTRE PÉRIPHÉRIQUE ]
+            <button id="bt-btn" class="bt-connect-btn" onclick="connecterBluetoothDirect()">CONNECTER BRIOCHE GP / BRACELET</button>
+        </div>
+
         <div>
-            <div class="hud-header">
-                <input type="text" id="destination-input" placeholder="[ PRESSER LA POIGNÉE POUR DICTER ]" readonly>
-            </div>
+            <div id="radar-alert" class="radar-flash">⚠️ ZONE DE CONTRÔLE VITESSE ⚠️</div>
             
-            <div id="radar-alert" class="radar-alert">⚠️ ZONE DE CONTRÔLE VITESSE ⚠️</div>
+            <div id="voice-indicator" class="voice-active">● ÉCOUTE EN COURS...</div>
             
-            <div class="side-panels" style="margin-top: 10px;">
-                <div id="gp-tracker" class="gp-tracker">BRIOCHE GP : PRÊT</div>
-                <div id="voice-status" class="voice-status">● MICRO ACTIF / PARLEZ</div>
+            <div class="speedometer" id="speed-display">
+                0 <span class="speed-unit">KM/H</span>
             </div>
         </div>
 
-        <div class="hud-footer" id="hud-footer">GPS RADAR SYSTEM : ONLINE</div>
+        <div id="status-display" class="status-bar">Bluetooth : Déconnecté</div>
     </div>
 
     <script>
-        // CONFIGURATION INITIALE
+        // CONFIGURATION
         mapboxgl.accessToken = 'VOTRE_TOKEN_MAPBOX_ICI';
-        const BOUTON_COMMODO = 'Enter'; // Touche émise par la poignée Brioche GP
-        const RAYON_ALERTE_METRES = 400; // Distance de déclenchement de l'alerte radar
+        const RAYON_RADAR_METRES = 400; // Rayon de détection des zones de danger
 
-        // Base de données locale de test (Exemple : Zones de danger à Paris)
-        // Remplacer ou alimenter avec vos coordonnées GeoJSON réelles
-        const zonesDanger = [
-            { id: 1, name: "Radar Fixe A86", lng: 2.3522, lat: 48.8566 }, // Centre Paris pour test
-            { id: 2, name: "Zone de Contrôle Périphérique", lng: 2.2945, lat: 48.8584 } // Proche Tour Eiffel
+        // Base de données de coordonnées pour les radars (Modifiables selon vos besoins)
+        const baseRadars = [
+            { id: 1, lat: 48.8566, lng: 2.3522, name: "Radar Fixe" } // Point test (Paris)
         ];
 
-        // Initialisation de la carte (Mode Navigation Nuit)
-        const map = new mapboxgl.Map({
-            container: 'map',
-            style: 'mapbox://styles/mapbox/dark-v11', 
-            center: [2.3522, 48.8566], 
-            zoom: 14,
-            pitch: 55, // Effet perspective 3D motard
-            bearing: 0
-        });
+        // Éléments DOM
+        const navText = document.getElementById('nav-text');
+        const speedDisplay = document.getElementById('speed-display');
+        const radarAlert = document.getElementById('radar-alert');
+        const voiceIndicator = document.getElementById('voice-indicator');
+        const statusDisplay = document.getElementById('status-display');
+        const btBtn = document.getElementById('bt-btn');
+        let isListening = false;
 
-        // Curseur de votre position GPS réelle
-        const gpsMarker = new mapboxgl.Marker({ color: '#00ffcc' })
-            .setLngLat([2.3522, 48.8566])
-            .addTo(map);
-
-        // Éléments d'interface
-        const destInput = document.getElementById('destination-input');
-        const voiceStatus = document.getElementById('voice-status');
-        const gpTracker = document.getElementById('gp-tracker');
-        const hudFooter = document.getElementById('hud-footer');
-        const radarAlertBox = document.getElementById('radar-alert');
-
-        // Générateur d'alerte sonore (Audio Context System pour éviter de charger des fichiers .mp3 lourds)
+        // --- GÉNÉRATEUR AUDIO DU BIP RADAR ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function emettreBipAlerte() {
+        function emettreBipRadar() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Fréquence aiguë (Bip)
-            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.15); // Durée du bip : 150ms
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.setValueAtTime(950, audioCtx.currentTime); // Son aigu d'alerte
+            gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15); // Durée 150ms
         }
 
-        // --- MOTEUR DE DICTÉE VOCALE ---
+        // --- APPAIRAGE WEB BLUETOOTH DIRECT (Plus besoin de focus) ---
+        async function connecterBluetoothDirect() {
+            statusDisplay.innerText = "Recherche du matériel...";
+            try {
+                // Ouvre la fenêtre d'appairage native d'Android
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: ['generic_access'] // UUID générique modifiable selon specs de la poignée
+                });
+
+                statusDisplay.innerText = "Liaison avec : " + device.name;
+                const server = await device.gatt.connect();
+                
+                // Cache le bouton jaune pour dégager le HUD
+                btBtn.style.display = 'none';
+                navText.innerText = "[ APPUYEZ SUR LA POIGNÉE POUR DICTER ]";
+                statusDisplay.innerText = "Liaison Directe Webapp : OK";
+
+                device.addEventListener('gattserverdisconnected', () => {
+                    statusDisplay.innerText = "Bluetooth perdu !";
+                    btBtn.style.display = 'block';
+                });
+
+                // DÉCLENCHEUR : Intercepte les signaux du périphérique appairé
+                // Dès que le périphérique Bluetooth envoie son signal de bouton (advertisement ou valeur de caractéristique)
+                device.addEventListener('advertisementreceived', (event) => {
+                    declencherDictée();
+                });
+
+            } catch (error) {
+                console.error(error);
+                statusDisplay.innerText = "Échec : " + error.message;
+            }
+        }
+
+        // Fonction d'activation forcée par le Bluetooth
+        function declencherDictée() {
+            if (!isListening && recognition) {
+                recognition.start();
+            }
+        }
+
+        // --- RECONNAISSANCE VOCALE (WEB SPEECH) ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition;
 
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
             recognition.lang = 'fr-FR';
-            recognition.continuous = false;
 
             recognition.onstart = () => {
                 isListening = true;
-                voiceStatus.style.display = 'block';
-                hudFooter.innerText = "ÉCOUTE EN COURS...";
+                voiceIndicator.style.display = 'block';
+                navText.innerText = "OÙ ALLEZ-VOUS ?";
             };
 
             recognition.onresult = (event) => {
-                const adresseDictee = event.results[0][0].transcript;
-                destInput.value = adresseDictee;
-                rechercherDestination(adresseDictee);
+                const adresse = event.results[0][0].transcript;
+                navText.innerText = "VERS : " + adresse.toUpperCase();
+                calculerItineraireSimulation(); // Déclenche la boucle de mouvement
             };
 
             recognition.onend = () => {
                 isListening = false;
-                voiceStatus.style.display = 'none';
-                resetHUDDelayed();
+                voiceIndicator.style.display = 'none';
             };
         }
 
-        // --- ACTIONNEUR BRIOCHE GP ---
-        let isListening = false;
-        window.addEventListener('keydown', (event) => {
-            gpTracker.innerText = `COMMODO CODE : "${event.key}"`;
-            
-            if (event.key === BOUTON_COMMODO) {
-                event.preventDefault();
-                if (!isListening && recognition) {
-                    recognition.start();
-                }
-            }
-        });
+        // --- TRAITEMENT DU GÉOFENCING (SURVEILLANCE RADARS) ---
+        function verifierDistanceRadars(maLng, maLat) {
+            let zoneAlerteActive = false;
 
-        // --- MOTEUR DE SURVEILLANCE DES RADARS (GÉOFENCING) ---
-        // Cette fonction doit être appelée à chaque fois que votre position GPS change
-        function verifierProximiteRadars(maLng, maLat) {
-            let alerteActive = false;
+            baseRadars.forEach(radar => {
+                // Formule Haversine pour calculer la distance métrique sur Terre
+                const R = 6371000;
+                const dLat = (radar.lat - maLat) * Math.PI / 180;
+                const dLon = (radar.lng - maLng) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                          Math.cos(maLat * Math.PI / 180) * Math.cos(radar.lat * Math.PI / 180) *
+                          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                const distanceMètres = R * c;
 
-            zonesDanger.forEach(zone => {
-                const distance = calculerDistance(maLat, maLng, zone.lat, zone.lng);
-                
-                // Si vous êtes à moins de 400 mètres d'une zone enregistrée
-                if (distance <= RAYON_ALERTE_METRES) {
-                    alerteActive = true;
-                    radarAlertBox.innerText = `⚠️ CONTROLE : ${zone.name.toUpperCase()} (${Math.round(distance)}m) ⚠️`;
+                if (distanceMètres <= RAYON_RADAR_METRES) {
+                    zoneAlerteActive = true;
+                    radarAlert.innerText = `⚠️ RADAR : ${Math.round(distanceMètres)} METRES ⚠️`;
                 }
             });
 
-            if (alerteActive) {
-                if (radarAlertBox.style.display !== 'block') {
-                    radarAlertBox.style.display = 'block';
-                    emettreBipAlerte(); // Déclenche le son dans les lunettes
+            if (zoneAlerteActive) {
+                if (radarAlert.style.display !== 'block') {
+                    radarAlert.style.display = 'block';
+                    emettreBipRadar(); // Émet le son dans le système audio des lunettes
                 }
             } else {
-                radarAlertBox.style.display = 'none';
+                radarAlert.style.display = 'none';
             }
         }
 
-        // Formule mathématique de Haversine pour calculer la distance exacte en mètres entre deux coordonnées GPS
-        function calculerDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000; // Rayon de la Terre en mètres
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c; 
-        }
-
-        // --- GEOLOCALISATION EN TEMPS RÉEL (Simulation de conduite) ---
-        // Sur route réelle, remplacez par : navigator.geolocation.watchPosition(...)
-        map.on('move', () => {
-            const centreCarte = map.getCenter();
-            gpsMarker.setLngLat(centreCarte);
-            // Vérifie les radars à chaque déplacement sur la carte
-            verifierProximiteRadars(centreCarte.lng, centreCarte.lat);
-        });
-
-        // Appel API Geocoding de Mapbox
-        function rechercherDestination(adresse) {
-            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(adresse)}.json?access_token=${mapboxgl.accessToken}&country=FR&limit=1`;
-
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.features && data.features.length > 0) {
-                        const coords = data.features[0].geometry.coordinates;
-                        map.flyTo({ center: coords, zoom: 15, essential: true });
-                        gpsMarker.setLngLat(coords);
-                        hudFooter.innerText = "NAV : " + data.features[0].place_name.toUpperCase();
-                    } else {
-                        hudFooter.innerText = "DESTINATION INTROUVABLE";
-                    }
-                });
-        }
-
-        function resetHUDDelayed() {
-            setTimeout(() => {
-                if (!isListening) {
-                    hudFooter.innerText = "GPS RADAR SYSTEM : ONLINE";
-                }
-            }, 3000);
-        }
-    </script>
-</body>
-</html>
-      right: 15px;
-            bottom: 20px;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-
-        .search-box {
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid #00ffcc;
-            border-radius: 6px;
-            padding: 12px;
-            pointer-events: auto;
-        }
-
-        .search-box input {
-            width: 100%;
-            background: transparent;
-            border: none;
-            color: #00ffcc;
-            font-size: 16px;
-            font-family: inherit;
-            outline: none;
-        }
-
-        /* Indicateur d'enregistrement Micro */
-        .mic-indicator {
-            align-self: flex-end;
-            margin-top: 10px;
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid #ff3333;
-            color: #ff3333;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-weight: bold;
-            display: none;
-            animation: pulse 1.2s infinite;
-        }
-
-        /* Outil de debug du Neural Band intégré au HUD */
-        .debug-panel {
-            background: rgba(0, 0, 0, 0.9);
-            border: 1px dashed #ffaa00;
-            color: #ffaa00;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            margin-top: 10px;
-            align-self: flex-start;
-        }
-
-        /* Barre de statut inférieure */
-        .hud-status {
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid #00ffcc;
-            padding: 8px 15px;
-            border-radius: 4px;
-            font-size: 12px;
-            text-align: center;
-            align-self: center;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
-        }
-    </style>
-</head>
-<body>
-
-    <div id="map"></div>
-
-    <div class="hud-container">
-        <div>
-            <div class="search-box">
-                <input type="text" id="search-input" placeholder="[ En attente du geste Neural ]" readonly>
-            </div>
-            
-            <div id="mic-indicator" class="mic-indicator">• MICRO ACTIF / PARLEZ</div>
-            
-            <div id="debug-panel" class="debug-panel">DERNIER GESTE DÉTECTÉ : AUCUN (Faites un geste pour tester)</div>
-        </div>
-
-        <div class="hud-status" id="hud-status">NEURAL SYSTEM : READY</div>
-    </div>
-
-    <script>
-        // CONFIGURATION : Mettez votre clé Mapbox ici
-        mapboxgl.accessToken = 'VOTRE_TOKEN_MAPBOX_ICI';
-
-        // Variable clé pour le déclenchement (Modifiez 'Enter' si votre bracelet envoie autre chose)
-        const DECLENCHEUR_NEURAL = 'Enter'; 
-
-        // Initialisation de la carte (Style Dark pour économie d'énergie et lisibilité Meta Display)
-        const map = new mapboxgl.Map({
-            container: 'map',
-            style: 'mapbox://styles/mapbox/dark-v11', 
-            center: [2.3522, 48.8566], // Paris par défaut
-            zoom: 14,
-            pitch: 50,
-            bearing: 0
-        });
-
-        // Marqueur de position de navigation
-        const navMarker = new mapboxgl.Marker({ color: '#00ffcc' })
-            .setLngLat([2.3522, 48.8566])
-            .addTo(map);
-
-        // Éléments du DOM
-        const searchInput = document.getElementById('search-input');
-        const micIndicator = document.getElementById('mic-indicator');
-        const debugPanel = document.getElementById('debug-panel');
-        const hudStatus = document.getElementById('hud-status');
-        let isListening = false;
-
-        // Configuration du moteur de dictée vocale (Web Speech API)
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition;
-
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.lang = 'fr-FR';
-            recognition.continuous = false;
-            recognition.interimResults = false;
-
-            recognition.onstart = () => {
-                isListening = true;
-                micIndicator.style.display = 'block';
-                hudStatus.innerText = "ÉCOUTE EN COURS...";
-                hudStatus.style.color = "#ff3333";
-                hudStatus.style.borderColor = "#ff3333";
-            };
-
-            recognition.onresult = (event) => {
-                const texteDicte = event.results[0][0].transcript;
-                searchInput.value = texteDicte;
-                hudStatus.innerText = "RECHERCHE : " + texteDicte.toUpperCase();
-                lancerRechercheDestination(texteDicte);
-            };
-
-            recognition.onerror = (event) => {
-                hudStatus.innerText = "ERREUR DICTÉE : " + event.error.toUpperCase();
-                resetHUDDelayed();
-            };
-
-            recognition.onend = () => {
-                isListening = false;
-                micIndicator.style.display = 'none';
-                resetHUDDelayed();
-            };
-        } else {
-            hudStatus.innerText = "ERREUR : NAVIGATEUR NON COMPATIBLE MICRO";
-        }
-
-        // --- INTERCEPTION DU NEURAL BAND + DÉTECTEUR DE TOUCHES ---
-        window.addEventListener('keydown', (event) => {
-            // Affiche immédiatement la touche reçue sur l'écran pour que vous puissiez voir le code du geste
-            debugPanel.innerText = `DERNIER GESTE DÉTECTÉ : Code = "${event.key}"`;
-            debugPanel.style.color = "#00ffcc";
-            debugPanel.style.borderColor = "#00ffcc";
-
-            // Si la touche correspond à votre déclencheur configuré
-            if (event.key === DECLENCHEUR_NEURAL) {
-                event.preventDefault(); // Bloque l'action Android par défaut
+        // --- SIMULATION DE CONDUITE APRÈS RECHERCHE ---
+        function calculerItineraireSimulation() {
+            let vitesseSimulée = 0;
+            setInterval(() => {
+                if (vitesseSimulée < 90) vitesseSimulée += 3;
+                speedDisplay.innerHTML = `${vitesseSimulée} <span class="speed-unit">KM/H</span>`;
                 
-                if (!isListening && recognition) {
-                    recognition.start();
-                }
-            }
-
-            // Réinitialise la couleur du panneau de debug après 2 secondes
-            setTimeout(() => {
-                debugPanel.style.color = "#ffaa00";
-                debugPanel.style.borderColor = "#ffaa00";
-            }, 2000);
-        });
-
-        // Liaison avec l'API Geocoding de Mapbox pour déplacer la carte
-        function lancerRechercheDestination(query) {
-            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=FR&limit=1`;
-
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.features && data.features.length > 0) {
-                        const coords = data.features[0].geometry.coordinates;
-                        const nomLieu = data.features[0].place_name;
-
-                        // Animation fluide vers la destination
-                        map.flyTo({ center: coords, zoom: 15, essential: true });
-                        navMarker.setLngLat(coords);
-                        hudStatus.innerText = "NAV VERS : " + nomLieu.toUpperCase();
-                    } else {
-                        hudStatus.innerText = "DESTINATION INTROUVABLE";
-                    }
-                })
-                .catch(err => {
-                    hudStatus.innerText = "ERREUR RÉSEAU MAPBOX";
-                });
-        }
-
-        function resetHUDDelayed() {
-            setTimeout(() => {
-                if (!isListening) {
-                    hudStatus.innerText = "NEURAL SYSTEM : READY";
-                    hudStatus.style.color = "#00ffcc";
-                    hudStatus.style.borderColor = "#00ffcc";
-                }
-            }, 3500);
+                // En conduite réelle, remplacez les paramètres ci-dessous par les données de `navigator.geolocation.watchPosition`
+                verifierDistanceRadars(2.3522, 48.8566); 
+            }, 250);
         }
     </script>
 </body>
