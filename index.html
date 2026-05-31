@@ -2,74 +2,53 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Waze HUD Vocal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HUD Waze</title>
     <style>
-        body { 
-            margin: 0; background: #000; color: #fff; 
-            font-family: sans-serif; display: flex; 
-            flex-direction: column; height: 100vh; overflow: hidden; 
-        }
-        
-        #input-zone { 
-            flex: 1; padding: 40px; display: flex; 
-            flex-direction: column; justify-content: center; gap: 40px; 
-        }
-        
-        textarea { 
-            width: 100%; padding: 30px; font-size: 35px; 
-            border: 6px solid #00d4ff; background: #222; color: #fff; 
-            border-radius: 20px; box-sizing: border-box; resize: none;
-        }
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        #app { padding: 40px; display: flex; flex-direction: column; gap: 40px; }
         
         button { 
-            width: 100%; padding: 50px; font-size: 40px; 
-            border: none; border-radius: 20px; font-weight: bold; 
-            color: #000; cursor: pointer;
+            padding: 50px; font-size: 40px; border-radius: 20px; 
+            border: none; font-weight: bold; cursor: pointer;
         }
-        
-        #voiceBtn { background: #ffcc00; }
-        #searchBtn { background: #00d4ff; }
-        
-        a { text-decoration: none; color: #000; display: block; width: 100%; }
+        #voiceBtn { background: #ffcc00; color: #000; }
+        #searchBtn { background: #00d4ff; color: #000; }
+        textarea { width: 100%; padding: 30px; font-size: 35px; background: #222; color: #fff; border: 4px solid #00d4ff; border-radius: 20px; }
     </style>
 </head>
 <body>
-
-    <div id="input-zone">
-        <textarea id="addressInput" placeholder="DESTINATION..."></textarea>
+    <div id="app">
+        <textarea id="addressInput" placeholder="Attente de dictée..."></textarea>
         <button id="voiceBtn" onclick="startVoice()">🎤 DICTER DESTINATION</button>
         <button id="searchBtn" onclick="chercher()">CHERCHER</button>
     </div>
 
     <script>
-        // Fonction pour activer la reconnaissance vocale
         function startVoice() {
-            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            // Vérification du support
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Votre navigateur ne supporte pas la dictée vocale.");
+                return;
+            }
+            const recognition = new SpeechRecognition();
             recognition.lang = 'fr-FR';
             recognition.start();
             recognition.onresult = (event) => {
                 document.getElementById('addressInput').value = event.results[0][0].transcript;
             };
+            recognition.onerror = (e) => alert("Erreur micro : " + e.error);
         }
 
         function chercher() {
             const addr = document.getElementById('addressInput').value;
-            if (!addr) return alert("Veuillez d'abord dicter une adresse.");
-            
-            const btn = document.getElementById('searchBtn');
-            btn.textContent = "RECHERCHE...";
-
             fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`)
             .then(res => res.json())
             .then(data => {
                 if (data.length > 0) {
                     const url = `https://waze.com/ul?ll=${data[0].lat},${data[0].lon}&navigate=yes`;
-                    btn.style.background = "#00ff99";
-                    btn.innerHTML = `<a href="${url}">LANCER WAZE</a>`;
-                } else {
-                    alert("Adresse non trouvée.");
-                    btn.textContent = "CHERCHER";
+                    document.getElementById('searchBtn').innerHTML = `<a href="${url}" style="text-decoration:none; color:#000;">LANCER WAZE</a>`;
                 }
             });
         }
