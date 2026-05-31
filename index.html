@@ -1,286 +1,669 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HUD GPS Moto - Bluetooth Direct & Radars</title>
-    
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>META GPS NAV</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    <style>
-        /* FOND NOIR ABSOLU = TRANSPARENCE SUR LES VERRES META DISPLAY */
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000000; 
-            font-family: 'Arial', sans-serif;
-            overflow: hidden;
-            color: #00ffcc; /* Cyan/Vert fluo haute visibilité */
-            text-align: center;
-        }
+    body {
+      background: #0A0A0F;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Rajdhani', monospace;
+      overflow: hidden;
+    }
 
-        .hud-display {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            box-sizing: border-box;
-            padding: 20px;
-        }
+    #root { width: 100%; }
 
-        /* Bouton HUD pour appairer le Bluetooth au démarrage */
-        .bt-connect-btn {
-            background: #ffaa00;
-            color: #000000;
-            border: none;
-            padding: 15px 30px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 30px;
-            cursor: pointer;
-            pointer-events: auto;
-            margin: 15px auto;
-            display: block;
-            box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
-        }
+    @keyframes scanline {
+      0%   { transform: translateY(-4px); }
+      100% { transform: translateY(100vh); }
+    }
+    @keyframes pulseRing {
+      0%   { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+      100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+    }
+    @keyframes slideIn {
+      from { transform: translateX(110px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+    @keyframes hudFlicker {
+      0%, 97%, 100% { opacity: 1; }
+      98%            { opacity: 0.82; }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-7px); }
+    }
+    @keyframes speedPulse {
+      0%, 100% { text-shadow: 0 0 18px #FF4444, 0 0 36px #FF444480; }
+      50%       { text-shadow: 0 0 28px #FF4444, 0 0 56px #FF4444A0, 0 0 80px #FF444460; }
+    }
 
-        /* Zone Supérieure : Instructions / Navigation */
-        .nav-instruction {
-            font-size: 22px;
-            font-weight: bold;
-            text-transform: uppercase;
-            background: rgba(0, 0, 0, 0.85);
-            padding: 15px;
-            border-bottom: 2px solid #00ffcc;
-        }
+    .hud-screen   { animation: hudFlicker 9s infinite; }
+    .speed-over   { animation: speedPulse 0.75s ease-in-out infinite; }
+    .alert-slide  { animation: slideIn 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    .mic-float    { animation: float 2.2s ease-in-out infinite; }
+    .blink        { animation: blink 1s ease-in-out infinite; }
 
-        /* BANDEAU FLASHEUR ROUGE (Prend le dessus en cas de radar proche) */
-        .radar-flash {
-            display: none; /* Masqué par défaut */
-            background: #ff0000;
-            color: #ffffff;
-            font-size: 26px;
-            font-weight: bold;
-            padding: 18px;
-            border-radius: 8px;
-            margin: 10px 0;
-            animation: flashBlink 0.4s infinite alternate;
-        }
+    .scan-overlay {
+      position: fixed; inset: 0; pointer-events: none; z-index: 100;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent, transparent 2px,
+        rgba(0,212,255,0.013) 2px, rgba(0,212,255,0.013) 4px
+      );
+    }
+    .scan-line {
+      position: fixed; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(0,212,255,0.38), transparent);
+      animation: scanline 7s linear infinite;
+      pointer-events: none; z-index: 101;
+    }
 
-        /* Zone Centrale : Vitesse réelle */
-        .speedometer {
-            font-size: 75px;
-            font-weight: 900;
-            color: #00ffcc;
-            margin: 15px 0;
-        }
-        .speed-unit {
-            font-size: 20px;
-            display: block;
-            font-weight: normal;
-        }
+    /* HUD card */
+    .hud-card {
+      width: 100%; max-width: 520px; margin: 0 auto;
+      background: linear-gradient(135deg, #0D1117 0%, #0A1628 50%, #0D1117 100%);
+      border: 1px solid rgba(0,212,255,0.28);
+      border-radius: 4px;
+      box-shadow: 0 0 60px rgba(0,212,255,0.08),
+                  inset 0 0 60px rgba(0,212,255,0.018),
+                  0 0 0 1px rgba(0,212,255,0.04);
+      position: relative; overflow: hidden;
+    }
 
-        /* Indicateur de micro actif */
-        .voice-active {
-            display: none;
-            color: #ff3333;
-            font-size: 22px;
-            font-weight: bold;
-            animation: pulse 1s infinite;
-        }
+    /* Corner brackets */
+    .corner { position: absolute; width: 20px; height: 20px; }
+    .corner-tl { top:0; left:0;  border-top: 2px solid rgba(0,212,255,0.6); border-left:  2px solid rgba(0,212,255,0.6); }
+    .corner-tr { top:0; right:0; border-top: 2px solid rgba(0,212,255,0.6); border-right: 2px solid rgba(0,212,255,0.6); }
+    .corner-bl { bottom:0; left:0;  border-bottom: 2px solid rgba(0,212,255,0.6); border-left:  2px solid rgba(0,212,255,0.6); }
+    .corner-br { bottom:0; right:0; border-bottom: 2px solid rgba(0,212,255,0.6); border-right: 2px solid rgba(0,212,255,0.6); }
 
-        /* Bas de l'écran : Statut de la connexion */
-        .status-bar {
-            font-size: 12px;
-            color: #ffaa00;
-            font-weight: bold;
-        }
+    /* Header */
+    .hud-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px 10px;
+      border-bottom: 1px solid rgba(0,212,255,0.14);
+    }
+    .hud-title {
+      color: #00D4FF; font-size: 11px; letter-spacing: 3px;
+      font-weight: 600; font-family: 'Orbitron';
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; margin-right: 10px;
+    }
+    .hud-time { color: rgba(255,255,255,0.38); font-size: 11px; letter-spacing: 1px; }
+    .gps-badge { color: #00FF88; font-size: 10px; letter-spacing: 2px; margin-left: 14px; }
 
-        /* Animations */
-        @keyframes flashBlink {
-            0% { background: #ff0000; box-shadow: 0 0 15px #ff0000; }
-            100% { background: #000000; color: #ff0000; box-shadow: 0 0 0px transparent; }
-        }
+    /* ─── IDLE ─── */
+    .idle-body { padding: 28px 24px; }
+    .dictation-label {
+      color: rgba(255,255,255,0.3); font-size: 11px;
+      letter-spacing: 3px; text-align: center; margin-bottom: 22px;
+    }
+    .mic-wrap { position: relative; display: inline-block; }
+    .pulse-ring {
+      position: absolute; top: 50%; left: 50%;
+      border-radius: 50%; border: 1px solid rgba(0,212,255,0.35);
+      pointer-events: none;
+    }
+    .mic-btn {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,255,0.14), rgba(0,212,255,0.06));
+      border: 2px solid rgba(0,212,255,0.38);
+      cursor: pointer; font-size: 32px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 18px rgba(0,212,255,0.1);
+      transition: all 0.28s; position: relative; z-index: 2;
+    }
+    .mic-btn.active {
+      border-color: #00D4FF;
+      box-shadow: 0 0 30px rgba(0,212,255,0.48);
+      background: radial-gradient(circle, rgba(0,212,255,0.22), rgba(0,212,255,0.1));
+    }
+    .listen-label {
+      color: #00D4FF; font-size: 12px; letter-spacing: 2px;
+      text-align: center; margin-top: 16px;
+    }
+    .voice-preview {
+      margin-top: 20px; padding: 10px 16px;
+      background: rgba(0,212,255,0.07);
+      border: 1px solid rgba(0,212,255,0.24);
+      border-radius: 3px; text-align: center;
+      color: #fff; font-size: 16px; font-weight: 500;
+    }
+    .input-row { display: flex; gap: 8px; margin: 20px 0 18px; }
+    .dest-input {
+      flex: 1;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(0,212,255,0.18);
+      border-radius: 3px; padding: 10px 14px;
+      color: #fff; font-size: 14px; font-family: 'Rajdhani';
+      letter-spacing: 1px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .dest-input:focus { border-color: rgba(0,212,255,0.5); }
+    .go-btn {
+      padding: 10px 18px;
+      background: rgba(0,212,255,0.18);
+      border: 1px solid rgba(0,212,255,0.55);
+      border-radius: 3px; color: #00D4FF;
+      cursor: pointer; font-size: 18px; transition: all 0.2s;
+    }
+    .go-btn:disabled {
+      background: rgba(255,255,255,0.03);
+      border-color: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.18); cursor: not-allowed;
+    }
+    .routes-label {
+      color: rgba(255,255,255,0.22); font-size: 10px;
+      letter-spacing: 3px; margin-bottom: 10px;
+    }
+    .route-btn {
+      width: 100%;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 3px; padding: 10px 14px; margin-bottom: 6px;
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+      transition: border-color 0.2s;
+    }
+    .route-btn:hover { border-color: rgba(0,212,255,0.3); }
+    .route-name { color: #fff; font-size: 13px; font-weight: 500; margin-left: 8px; }
+    .route-dur  { color: #00D4FF; font-size: 12px; text-align: right; }
+    .route-meta { color: rgba(255,255,255,0.28); font-size: 10px; }
 
-        @keyframes pulse {
-            0% { opacity: 0.4; }
-            50% { opacity: 1; }
-            100% { opacity: 0.4; }
-        }
-    </style>
+    /* ─── NAVIGATING ─── */
+    .nav-instruction {
+      padding: 20px 24px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.07), rgba(0,212,255,0.025));
+      border-bottom: 1px solid rgba(0,212,255,0.14);
+      display: flex; align-items: center; gap: 16px;
+    }
+    .instr-icon {
+      width: 60px; height: 60px; border-radius: 4px; flex-shrink: 0;
+      background: rgba(0,212,255,0.13);
+      border: 2px solid rgba(0,212,255,0.48);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      box-shadow: 0 0 18px rgba(0,212,255,0.18);
+    }
+    .instr-sublabel { color: rgba(255,255,255,0.35); font-size: 10px; letter-spacing: 3px; margin-bottom: 4px; }
+    .instr-text     { color: #fff; font-size: 17px; font-weight: 600; line-height: 1.2; }
+    .instr-dist     { color: #00D4FF; font-size: 20px; font-weight: 700; margin-top: 2px; }
+
+    .nav-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .stat-cell {
+      padding: 16px; text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.05);
+    }
+    .stat-cell:last-child { border-right: none; }
+    .stat-label { color: rgba(255,255,255,0.28); font-size: 9px; letter-spacing: 3px; margin-bottom: 4px; }
+    .stat-value { font-family: 'Orbitron'; line-height: 1; }
+    .stat-unit  { color: rgba(255,255,255,0.22); font-size: 10px; letter-spacing: 2px; }
+
+    .alert-box {
+      margin: 12px 16px; padding: 12px 16px; border-radius: 3px;
+      display: flex; align-items: center; gap: 12;
+    }
+    .alert-dot {
+      margin-left: auto; width: 6px; height: 6px; border-radius: 50%;
+    }
+
+    .nav-footer {
+      padding: 12px 16px;
+      border-top: 1px solid rgba(255,255,255,0.045);
+      display: flex; align-items: center; gap: 10;
+    }
+    .dest-label { color: rgba(255,255,255,0.28); font-size: 9px; letter-spacing: 2px; }
+    .dest-name  { color: #fff; font-size: 13px; font-weight: 500; }
+    .mic-small {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; cursor: pointer;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: all 0.2s;
+    }
+    .mic-small.active {
+      background: rgba(0,212,255,0.18);
+      border-color: rgba(0,212,255,0.55);
+    }
+    .stop-btn {
+      padding: 7px 14px;
+      background: rgba(255,68,68,0.11);
+      border: 1px solid rgba(255,68,68,0.28);
+      border-radius: 3px; color: #FF4444;
+      cursor: pointer; font-size: 11px; letter-spacing: 2px;
+      font-family: 'Rajdhani'; font-weight: 600;
+    }
+
+    /* HUD footer */
+    .hud-footer {
+      padding: 8px 20px;
+      border-top: 1px solid rgba(0,212,255,0.07);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .hud-brand { color: rgba(255,255,255,0.18); font-size: 9px; letter-spacing: 2px; }
+    .hud-tags  { display: flex; gap: 10px; }
+    .hud-tag   { color: rgba(0,212,255,0.38); font-size: 9px; letter-spacing: 1px; }
+
+    /* Voice overlay */
+    .voice-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.87);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 200;
+    }
+    .voice-overlay-text  { color: #00D4FF; font-size: 14px; letter-spacing: 4px; margin-bottom: 12px; }
+    .voice-overlay-heard { color: #fff; font-size: 20px; font-weight: 600; }
+    .cancel-btn {
+      margin-top: 24px; padding: 10px 28px;
+      background: rgba(255,68,68,0.14);
+      border: 1px solid rgba(255,68,68,0.38);
+      border-radius: 3px; color: #FF4444;
+      cursor: pointer; letter-spacing: 3px; font-size: 11px;
+      font-family: 'Rajdhani'; font-weight: 600;
+    }
+
+    /* Mic center for overlay */
+    .mic-center {
+      width: 90px; height: 90px; border-radius: 50%;
+      background: rgba(0,212,255,0.14);
+      border: 2px solid #00D4FF;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px;
+      box-shadow: 0 0 40px rgba(0,212,255,0.38);
+      position: relative; z-index: 2;
+    }
+
+    input::placeholder { color: rgba(255,255,255,0.22); }
+  </style>
 </head>
 <body>
+  <div class="scan-overlay"></div>
+  <div class="scan-line"></div>
+  <div id="root"></div>
 
-    <div id="map" style="display: none;"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script>
+  (function() {
+    const { useState, useEffect, useRef, useCallback } = React;
 
-    <div class="hud-display">
-        <div id="nav-text" class="nav-instruction">
-            [ APPAIREZ VOTRE PÉRIPHÉRIQUE ]
-            <button id="bt-btn" class="bt-connect-btn" onclick="connecterBluetoothDirect()">CONNECTER BRIOCHE GP / BRACELET</button>
-        </div>
+    const ALERTS = [
+      { id:1, type:"radar",   icon:"📷", message:"Radar fixe dans 300m",           distance:300,  color:"#FF4444" },
+      { id:2, type:"traffic", icon:"🚦", message:"Ralentissement 1.2 km",           distance:1200, color:"#FF8C00" },
+      { id:3, type:"turn",    icon:"↰",  message:"Tournez à gauche dans 500m",      distance:500,  color:"#00D4FF" },
+      { id:4, type:"speed",   icon:"⚠️", message:"Zone 30 — Réduisez la vitesse",   distance:0,    color:"#FFD700" },
+    ];
 
-        <div>
-            <div id="radar-alert" class="radar-flash">⚠️ ZONE DE CONTRÔLE VITESSE ⚠️</div>
-            
-            <div id="voice-indicator" class="voice-active">● ÉCOUTE EN COURS...</div>
-            
-            <div class="speedometer" id="speed-display">
-                0 <span class="speed-unit">KM/H</span>
-            </div>
-        </div>
+    const DEMO_ROUTES = [
+      { name:"Paris → Lyon",              duration:"4h12", distance:"465 km", via:"A6"  },
+      { name:"Montpellier → Marseille",   duration:"1h34", distance:"168 km", via:"A9"  },
+      { name:"Bordeaux → Toulouse",       duration:"2h05", distance:"244 km", via:"A62" },
+    ];
 
-        <div id="status-display" class="status-bar">Bluetooth : Déconnecté</div>
-    </div>
+    const INSTRUCTIONS = [
+      { icon:"⬆", text:"Continuez tout droit",   dist:"2.1 km" },
+      { icon:"↰",  text:"Tournez à gauche",       dist:"500 m"  },
+      { icon:"↱",  text:"Prenez la sortie 14",    dist:"3.8 km" },
+      { icon:"⬆", text:"Restez sur l'autoroute", dist:"12 km"  },
+    ];
 
-    <script>
-        // CONFIGURATION
-        mapboxgl.accessToken = 'VOTRE_TOKEN_MAPBOX_ICI';
-        const RAYON_RADAR_METRES = 400; // Rayon de détection des zones de danger
+    function MetaGPSNav() {
+      const [mode, setMode]                     = useState("idle");
+      const [destination, setDestination]       = useState("");
+      const [inputText, setInputText]           = useState("");
+      const [isListening, setIsListening]       = useState(false);
+      const [activeAlert, setActiveAlert]       = useState(null);
+      const [speed, setSpeed]                   = useState(112);
+      const [currentInstr, setCurrentInstr]     = useState(0);
+      const [eta]                               = useState("14:37");
+      const [distLeft]                          = useState("38.4 km");
+      const [voiceText, setVoiceText]           = useState("");
+      const [route, setRoute]                   = useState(null);
+      const [dots, setDots]                     = useState("");
+      const [clock, setClock]                   = useState("");
+      const [navDotGreen, setNavDotGreen]       = useState(false);
+      const recognitionRef = useRef(null);
+      const speedLimit = 130;
 
-        // Base de données de coordonnées pour les radars (Modifiables selon vos besoins)
-        const baseRadars = [
-            { id: 1, lat: 48.8566, lng: 2.3522, name: "Radar Fixe" } // Point test (Paris)
-        ];
+      // Clock
+      useEffect(() => {
+        const tick = () => setClock(new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}));
+        tick();
+        const t = setInterval(tick, 10000);
+        return () => clearInterval(t);
+      }, []);
 
-        // Éléments DOM
-        const navText = document.getElementById('nav-text');
-        const speedDisplay = document.getElementById('speed-display');
-        const radarAlert = document.getElementById('radar-alert');
-        const voiceIndicator = document.getElementById('voice-indicator');
-        const statusDisplay = document.getElementById('status-display');
-        const btBtn = document.getElementById('bt-btn');
-        let isListening = false;
+      // Dots animation
+      useEffect(() => {
+        if (!isListening) { setDots(""); return; }
+        const t = setInterval(() => setDots(d => d.length >= 3 ? "" : d + "."), 420);
+        return () => clearInterval(t);
+      }, [isListening]);
 
-        // --- GÉNÉRATEUR AUDIO DU BIP RADAR ---
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function emettreBipRadar() {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.frequency.setValueAtTime(950, audioCtx.currentTime); // Son aigu d'alerte
-            gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.15); // Durée 150ms
+      // Speed simulation
+      useEffect(() => {
+        if (mode !== "navigating") return;
+        const t = setInterval(() => {
+          setSpeed(s => Math.max(84, Math.min(138, s + (Math.random()-0.5)*6)));
+        }, 1200);
+        return () => clearInterval(t);
+      }, [mode]);
+
+      // Alert cycle
+      useEffect(() => {
+        if (mode !== "navigating") return;
+        const t = setInterval(() => {
+          const a = ALERTS[Math.floor(Math.random() * ALERTS.length)];
+          setActiveAlert(a);
+          setTimeout(() => setActiveAlert(null), 5200);
+        }, 7500);
+        return () => clearInterval(t);
+      }, [mode]);
+
+      // Instruction cycle
+      useEffect(() => {
+        if (mode !== "navigating") return;
+        const t = setInterval(() => {
+          setCurrentInstr(i => (i+1) % INSTRUCTIONS.length);
+        }, 6000);
+        return () => clearInterval(t);
+      }, [mode]);
+
+      // Nav dot
+      useEffect(() => {
+        setNavDotGreen(mode === "navigating");
+      }, [mode]);
+
+      const startListening = useCallback(() => {
+        setIsListening(true);
+        setVoiceText("");
+        if (!isListening) setInputText("");
+
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SR) {
+          const rec = new SR();
+          rec.lang = "fr-FR";
+          rec.continuous = false;
+          rec.interimResults = true;
+          rec.onresult = e => {
+            const t = Array.from(e.results).map(r => r[0].transcript).join("");
+            setVoiceText(t);
+            setInputText(t);
+          };
+          rec.onend = () => { setIsListening(false); recognitionRef.current = null; };
+          rec.onerror = () => { setIsListening(false); recognitionRef.current = null; };
+          rec.start();
+          recognitionRef.current = rec;
+        } else {
+          // Demo simulation
+          const demos = ["Paris Gare de Lyon", "Lyon Part-Dieu", "Marseille Vieux-Port", "Toulouse Centre"];
+          const demo = demos[Math.floor(Math.random() * demos.length)];
+          let i = 0;
+          const sim = setInterval(() => {
+            i++;
+            setVoiceText(demo.slice(0,i));
+            setInputText(demo.slice(0,i));
+            if (i >= demo.length) { clearInterval(sim); setIsListening(false); }
+          }, 75);
         }
+      }, [isListening]);
 
-        // --- APPAIRAGE WEB BLUETOOTH DIRECT (Plus besoin de focus) ---
-        async function connecterBluetoothDirect() {
-            statusDisplay.innerText = "Recherche du matériel...";
-            try {
-                // Ouvre la fenêtre d'appairage native d'Android
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: ['generic_access'] // UUID générique modifiable selon specs de la poignée
-                });
+      const stopListening = useCallback(() => {
+        if (recognitionRef.current) recognitionRef.current.stop();
+        setIsListening(false);
+      }, []);
 
-                statusDisplay.innerText = "Liaison avec : " + device.name;
-                const server = await device.gatt.connect();
-                
-                // Cache le bouton jaune pour dégager le HUD
-                btBtn.style.display = 'none';
-                navText.innerText = "[ APPUYEZ SUR LA POIGNÉE POUR DICTER ]";
-                statusDisplay.innerText = "Liaison Directe Webapp : OK";
+      const startNavigation = useCallback((dest) => {
+        const d = (dest || inputText).trim();
+        if (!d) return;
+        setDestination(d);
+        setRoute(DEMO_ROUTES[Math.floor(Math.random() * DEMO_ROUTES.length)]);
+        setMode("navigating");
+        setCurrentInstr(0);
+        setActiveAlert(null);
+      }, [inputText]);
 
-                device.addEventListener('gattserverdisconnected', () => {
-                    statusDisplay.innerText = "Bluetooth perdu !";
-                    btBtn.style.display = 'block';
-                });
+      const stopNavigation = useCallback(() => {
+        setMode("idle");
+        setDestination("");
+        setRoute(null);
+        setActiveAlert(null);
+        setInputText("");
+        setVoiceText("");
+      }, []);
 
-                // DÉCLENCHEUR : Intercepte les signaux du périphérique appairé
-                // Dès que le périphérique Bluetooth envoie son signal de bouton (advertisement ou valeur de caractéristique)
-                device.addEventListener('advertisementreceived', (event) => {
-                    declencherDictée();
-                });
+      const instr = INSTRUCTIONS[currentInstr];
+      const isOverSpeed = speed > speedLimit;
+      const dotColor = navDotGreen ? "#00FF88" : "#00D4FF";
 
-            } catch (error) {
-                console.error(error);
-                statusDisplay.innerText = "Échec : " + error.message;
-            }
-        }
+      // ── render ──
+      return React.createElement("div", { style:{ padding:"20px", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh" } },
 
-        // Fonction d'activation forcée par le Bluetooth
-        function declencherDictée() {
-            if (!isListening && recognition) {
-                recognition.start();
-            }
-        }
+        // HUD Card
+        React.createElement("div", { className:"hud-card hud-screen" },
+          // Corners
+          React.createElement("div", { className:"corner corner-tl" }),
+          React.createElement("div", { className:"corner corner-tr" }),
+          React.createElement("div", { className:"corner corner-bl" }),
+          React.createElement("div", { className:"corner corner-br" }),
 
-        // --- RECONNAISSANCE VOCALE (WEB SPEECH) ---
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition;
+          // Header
+          React.createElement("div", { className:"hud-header" },
+            React.createElement("div", { style:{display:"flex",alignItems:"center"} },
+              React.createElement("div", { className:"status-dot", style:{background:dotColor, boxShadow:`0 0 8px ${dotColor}`} }),
+              React.createElement("span", { className:"hud-title" }, "META GPS NAV")
+            ),
+            React.createElement("div", { style:{display:"flex",alignItems:"center"} },
+              React.createElement("span", { className:"hud-time" }, clock),
+              React.createElement("span", { className:"gps-badge" }, "GPS ●")
+            )
+          ),
 
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.lang = 'fr-FR';
+          // ── IDLE MODE ──
+          mode === "idle" && React.createElement("div", { className:"idle-body" },
+            React.createElement("p", { className:"dictation-label" }, "DICTEZ VOTRE DESTINATION"),
 
-            recognition.onstart = () => {
-                isListening = true;
-                voiceIndicator.style.display = 'block';
-                navText.innerText = "OÙ ALLEZ-VOUS ?";
-            };
+            // Mic button
+            React.createElement("div", { style:{textAlign:"center", marginBottom:28} },
+              React.createElement("div", { className:"mic-wrap" },
+                // Pulse rings when listening
+                isListening && [1,2,3].map(i =>
+                  React.createElement("div", {
+                    key:i,
+                    className:"pulse-ring",
+                    style:{
+                      width: 80+i*28, height: 80+i*28,
+                      animation:`pulseRing ${0.85+i*0.28}s ease-out ${i*0.18}s infinite`
+                    }
+                  })
+                ),
+                React.createElement("button", {
+                  className:`mic-btn ${isListening?"active":"mic-float"}`,
+                  onClick: isListening ? stopListening : startListening
+                }, isListening
+                  ? React.createElement("span", { className:"blink" }, "🎙")
+                  : "🎙"
+                )
+              ),
+              isListening && React.createElement("p", { className:"listen-label" }, `ÉCOUTE EN COURS${dots}`),
+              voiceText && React.createElement("div", { className:"voice-preview" }, `"${voiceText}"`)
+            ),
 
-            recognition.onresult = (event) => {
-                const adresse = event.results[0][0].transcript;
-                navText.innerText = "VERS : " + adresse.toUpperCase();
-                calculerItineraireSimulation(); // Déclenche la boucle de mouvement
-            };
+            // Text input
+            React.createElement("div", { className:"input-row" },
+              React.createElement("input", {
+                className:"dest-input",
+                value: inputText,
+                placeholder: "Ou tapez une adresse...",
+                onChange: e => setInputText(e.target.value),
+                onKeyDown: e => e.key === "Enter" && startNavigation()
+              }),
+              React.createElement("button", {
+                className:"go-btn",
+                disabled: !inputText.trim(),
+                onClick: () => startNavigation()
+              }, "→")
+            ),
 
-            recognition.onend = () => {
-                isListening = false;
-                voiceIndicator.style.display = 'none';
-            };
-        }
+            // Recent routes
+            React.createElement("p", { className:"routes-label" }, "ITINÉRAIRES RÉCENTS"),
+            DEMO_ROUTES.map((r,i) =>
+              React.createElement("button", {
+                key:i, className:"route-btn",
+                onClick: () => startNavigation(r.name)
+              },
+                React.createElement("div", { style:{display:"flex",alignItems:"center"} },
+                  React.createElement("span", null, "📍"),
+                  React.createElement("span", { className:"route-name" }, r.name)
+                ),
+                React.createElement("div", null,
+                  React.createElement("div", { className:"route-dur" }, r.duration),
+                  React.createElement("div", { className:"route-meta" }, `${r.distance} · ${r.via}`)
+                )
+              )
+            )
+          ),
 
-        // --- TRAITEMENT DU GÉOFENCING (SURVEILLANCE RADARS) ---
-        function verifierDistanceRadars(maLng, maLat) {
-            let zoneAlerteActive = false;
+          // ── NAVIGATING MODE ──
+          mode === "navigating" && React.createElement("div", null,
 
-            baseRadars.forEach(radar => {
-                // Formule Haversine pour calculer la distance métrique sur Terre
-                const R = 6371000;
-                const dLat = (radar.lat - maLat) * Math.PI / 180;
-                const dLon = (radar.lng - maLng) * Math.PI / 180;
-                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                          Math.cos(maLat * Math.PI / 180) * Math.cos(radar.lat * Math.PI / 180) *
-                          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                const distanceMètres = R * c;
+            // Next instruction
+            React.createElement("div", { className:"nav-instruction" },
+              React.createElement("div", { className:"instr-icon" }, instr.icon),
+              React.createElement("div", null,
+                React.createElement("p", { className:"instr-sublabel" }, "PROCHAINE MANŒUVRE"),
+                React.createElement("p", { className:"instr-text" }, instr.text),
+                React.createElement("p", { className:"instr-dist" }, instr.dist)
+              )
+            ),
 
-                if (distanceMètres <= RAYON_RADAR_METRES) {
-                    zoneAlerteActive = true;
-                    radarAlert.innerText = `⚠️ RADAR : ${Math.round(distanceMètres)} METRES ⚠️`;
-                }
-            });
+            // Stats row
+            React.createElement("div", { className:"nav-stats" },
+              // Speed
+              React.createElement("div", {
+                className:"stat-cell",
+                style:{ background: isOverSpeed ? "rgba(255,68,68,0.055)" : "transparent" }
+              },
+                React.createElement("p", { className:"stat-label" }, "VITESSE"),
+                React.createElement("p", {
+                  className:`stat-value ${isOverSpeed?"speed-over":""}`,
+                  style:{
+                    fontSize:34, fontWeight:900,
+                    color: isOverSpeed ? "#FF4444" : "#fff",
+                    textShadow: isOverSpeed ? undefined : "0 0 18px rgba(255,255,255,0.28)"
+                  }
+                }, Math.round(speed)),
+                React.createElement("p", { className:"stat-unit" }, "km/h"),
+                isOverSpeed && React.createElement("p", { style:{color:"#FF4444",fontSize:9,letterSpacing:1,marginTop:2} }, `LIMITE ${speedLimit}`)
+              ),
+              // ETA
+              React.createElement("div", { className:"stat-cell" },
+                React.createElement("p", { className:"stat-label" }, "ARRIVÉE"),
+                React.createElement("p", { className:"stat-value", style:{fontSize:28,fontWeight:700,color:"#00FF88"} }, eta),
+                React.createElement("p", { className:"stat-unit" }, "estimée")
+              ),
+              // Distance
+              React.createElement("div", { className:"stat-cell" },
+                React.createElement("p", { className:"stat-label" }, "RESTANT"),
+                React.createElement("p", { className:"stat-value", style:{fontSize:22,fontWeight:700,color:"#fff"} }, distLeft),
+                React.createElement("p", { style:{color:"#00D4FF",fontSize:10,letterSpacing:1,marginTop:2} }, route?.via || "A7")
+              )
+            ),
 
-            if (zoneAlerteActive) {
-                if (radarAlert.style.display !== 'block') {
-                    radarAlert.style.display = 'block';
-                    emettreBipRadar(); // Émet le son dans le système audio des lunettes
-                }
-            } else {
-                radarAlert.style.display = 'none';
-            }
-        }
+            // Active alert
+            activeAlert && React.createElement("div", {
+              key: activeAlert.id,
+              className:"alert-box alert-slide",
+              style:{
+                background:`${activeAlert.color}14`,
+                border:`1px solid ${activeAlert.color}58`,
+                borderLeft:`3px solid ${activeAlert.color}`,
+                boxShadow:`0 0 18px ${activeAlert.color}1A`,
+                gap:12
+              }
+            },
+              React.createElement("span", { style:{fontSize:22} }, activeAlert.icon),
+              React.createElement("div", null,
+                React.createElement("p", { style:{color:activeAlert.color,fontSize:13,fontWeight:600} }, activeAlert.message),
+                activeAlert.distance > 0 && React.createElement("p", { style:{color:"rgba(255,255,255,0.38)",fontSize:11,marginTop:2} },
+                  `Dans ${activeAlert.distance >= 1000 ? (activeAlert.distance/1000).toFixed(1)+" km" : activeAlert.distance+" m"}`
+                )
+              ),
+              React.createElement("div", {
+                className:"alert-dot blink",
+                style:{background:activeAlert.color, boxShadow:`0 0 7px ${activeAlert.color}`}
+              })
+            ),
 
-        // --- SIMULATION DE CONDUITE APRÈS RECHERCHE ---
-        function calculerItineraireSimulation() {
-            let vitesseSimulée = 0;
-            setInterval(() => {
-                if (vitesseSimulée < 90) vitesseSimulée += 3;
-                speedDisplay.innerHTML = `${vitesseSimulée} <span class="speed-unit">KM/H</span>`;
-                
-                // En conduite réelle, remplacez les paramètres ci-dessous par les données de `navigator.geolocation.watchPosition`
-                verifierDistanceRadars(2.3522, 48.8566); 
-            }, 250);
-        }
-    </script>
+            // Footer
+            React.createElement("div", { className:"nav-footer" },
+              React.createElement("span", null, "📍"),
+              React.createElement("div", { style:{flex:1} },
+                React.createElement("p", { className:"dest-label" }, "DESTINATION"),
+                React.createElement("p", { className:"dest-name" }, destination)
+              ),
+              React.createElement("button", {
+                className:`mic-small ${isListening?"active":""}`,
+                onClick: isListening ? stopListening : startListening
+              }, "🎙"),
+              React.createElement("button", { className:"stop-btn", onClick:stopNavigation }, "STOP")
+            )
+          ),
+
+          // HUD footer
+          React.createElement("div", { className:"hud-footer" },
+            React.createElement("span", { className:"hud-brand" }, "META DISPLAY · AR-NAV v2.1"),
+            React.createElement("div", { className:"hud-tags" },
+              ["◈ GPS","◈ VOCAL","◈ ALERTES"].map(s =>
+                React.createElement("span", { key:s, className:"hud-tag" }, s)
+              )
+            )
+          )
+        ),
+
+        // Voice overlay (during navigation)
+        mode === "navigating" && isListening && React.createElement("div", { className:"voice-overlay" },
+          React.createElement("div", { style:{textAlign:"center"} },
+            React.createElement("div", { style:{position:"relative",display:"inline-block",marginBottom:24} },
+              [1,2,3].map(i =>
+                React.createElement("div", {
+                  key:i,
+                  className:"pulse-ring",
+                  style:{
+                    width:80+i*30, height:80+i*30,
+                    border:"1px solid rgba(0,212,255,0.28)",
+                    animation:`pulseRing ${0.85+i*0.28}s ease-out ${i*0.18}s infinite`
+                  }
+                })
+              ),
+              React.createElement("div", { className:"mic-center" }, "🎙")
+            ),
+            React.createElement("p", { className:"voice-overlay-text" }, `NOUVELLE DESTINATION${dots}`),
+            voiceText && React.createElement("p", { className:"voice-overlay-heard" }, `"${voiceText}"`),
+            React.createElement("button", { className:"cancel-btn", onClick:stopListening }, "ANNULER")
+          )
+        )
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(MetaGPSNav));
+  })();
+  </script>
 </body>
 </html>
