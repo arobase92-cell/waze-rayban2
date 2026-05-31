@@ -3,75 +3,84 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Waze HUD Large</title>
+    <title>Waze HUD Navigator</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; color: #fff; font-family: sans-serif; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
         
-        /* La carte prend maintenant 70% de la hauteur */
-        #map { height: 70vh; width: 100%; }
+        #app-wrapper { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
         
-        /* Les contrôles sont agrandis */
-        #controls { height: 30vh; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        #map { height: 60vh; width: 100%; }
+        
+        #controls { height: 40vh; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
         
         input { 
-            padding: 25px; 
-            font-size: 24px; /* Texte plus grand */
-            border-radius: 12px; 
-            border: 2px solid #333; 
-            background: #111;
+            padding: 30px; 
+            font-size: 28px; 
+            border-radius: 15px; 
+            border: 2px solid #555; 
+            background: #222;
             color: white;
+            width: 100%;
         }
         
-        button { 
-            padding: 25px; 
-            font-size: 28px; /* Bouton très grand et facile à cliquer */
-            border-radius: 12px; 
+        button, #btn-link-container { 
+            padding: 30px; 
+            font-size: 32px; 
+            border-radius: 15px; 
             border: none; 
             background: #00d4ff; 
             font-weight: bold; 
-            cursor: pointer; 
+            text-align: center;
+            cursor: pointer;
         }
+        
+        a { color: #000; text-decoration: none; display: block; width: 100%; height: 100%; }
     </style>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
-    <div id="map"></div>
-    <div id="controls">
-        <input type="text" id="addressInput" placeholder="Adresse de destination..." />
-        <button id="actionBtn" onclick="processAction()">CHERCHER</button>
+    <div id="app-wrapper">
+        <div id="map"></div>
+        <div id="controls">
+            <input type="text" id="addressInput" placeholder="Saisir la destination..." />
+            <button id="actionBtn" onclick="processAction()">CHERCHER</button>
+        </div>
     </div>
 
     <script>
         const map = L.map('map').setView([48.8566, 2.3522], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         let marker = null;
-        let coords = null;
 
         function processAction() {
             const btn = document.getElementById('actionBtn');
             const address = document.getElementById('addressInput').value;
 
-            if (btn.textContent === "CHERCHER") {
-                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.length > 0) {
-                        coords = { lat: data[0].lat, lon: data[0].lon };
-                        map.setView([coords.lat, coords.lon], 15);
-                        if (marker) map.removeLayer(marker);
-                        marker = L.marker([coords.lat, coords.lon]).addTo(map);
-                        
-                        btn.textContent = "LANCER WAZE";
-                        btn.style.background = "#00ff99";
-                    } else {
-                        alert("Adresse non trouvée");
-                    }
-                });
-            } else {
-                window.location.href = `waze://?ll=${coords.lat},${coords.lon}&navigate=yes`;
-            }
+            if (!address) return alert("Veuillez entrer une adresse");
+
+            btn.textContent = "CALCUL...";
+
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.length > 0) {
+                    const lat = data[0].lat;
+                    const lon = data[0].lon;
+                    
+                    map.setView([lat, lon], 15);
+                    if (marker) map.removeLayer(marker);
+                    marker = L.marker([lat, lon]).addTo(map);
+                    
+                    // Transformation du bouton en lien cliquable pour Waze
+                    btn.style.background = "#00ff99";
+                    btn.innerHTML = `<a href="waze://?ll=${lat},${lon}&navigate=yes">LANCER WAZE</a>`;
+                } else {
+                    alert("Adresse non trouvée");
+                    btn.textContent = "CHERCHER";
+                }
+            });
         }
     </script>
 </body>
