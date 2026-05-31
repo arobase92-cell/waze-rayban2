@@ -1,41 +1,341 @@
-            text-rendering: optimizeLegibility;
-    <!DOCTYPE html>
+    }
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Waze HUD — Ray-Ban Display</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap');
 
-  <!-- META DISPLAY OPTIMIZED -->
-  <meta
-    name="viewport"
-    content="
-      width=device-width,
-      initial-scale=1,
-      maximum-scale=1,
-      user-scalable=no,
-      viewport-fit=cover
-    "
-  />
+        :root {
+            --bg: #050709;
+            --surface: #10151b;
+            --surface2: #151d26;
+            --waze-blue: #00d4ff;
+            --waze-cyan: #00ffcc;
+            --text: #eef8ff;
+            --muted: #7d93a5;
+            --border: #223140;
+            --success: #00ff99;
+        }
 
-  <title>Waze HUD — Ray-Ban Display</title>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap');
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 24px;
+            -webkit-font-smoothing: antialiased;
+            touch-action: manipulation;
+            zoom: 1.2;
+        }
 
-    :root {
-      --bg: #050709;
-      --surface: #10151b;
-      --surface2: #151d26;
+        body { display: flex; flex-direction: column; }
+        #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
 
-      --waze-blue: #00d4ff;
-      --waze-cyan: #00ffcc;
+        /* ========================= TOPBAR ========================== */
+        #topbar {
+            height: 65px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 18px;
+            background: var(--surface);
+            border-bottom: 2px solid var(--border);
+            flex-shrink: 0;
+        }
 
-      --text: #eef8ff;
-      --muted: #7d93a5;
+        #logo {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: var(--waze-blue);
+            text-transform: uppercase;
+        }
 
-      --border: #223140;
-      --success: #00ff99;
-    }
+        #status-bar {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 18px;
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--muted);
+        }
 
+        #gps-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #555;
+        }
+
+        #gps-dot.active {
+            background: var(--success);
+            box-shadow: 0 0 12px var(--success);
+        }
+
+        /* ========================= MAIN ========================== */
+        #main { flex: 1; display: flex; min-height: 0; }
+
+        /* ========================= MAP HUB ========================== */
+        #map-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Filtre CSS pour rendre la carte ultra-sombre/HUD */
+        .leaflet-layer, .leaflet-control-zoom {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        /* ========================= PANEL ========================== */
+        #panel {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 14px;
+            background: var(--bg);
+            border-left: 2px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .panel-section { display: flex; flex-direction: column; gap: 8px; }
+        .label { font-size: 16px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+
+        #destination-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+            background: var(--surface2);
+            color: var(--text);
+            font-size: 20px;
+            font-family: 'Rajdhani', sans-serif;
+            outline: none;
+        }
+
+        #nav-btn {
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--waze-blue), var(--waze-cyan));
+            color: #001018;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        #coords-display {
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            font-size: 16px;
+            line-height: 1.6;
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--waze-cyan);
+        }
+
+        #hud-instruction {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--success);
+            margin-top: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        /* ========================= SPLASH ========================== */
+        #splash {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            z-index: 100;
+        }
+
+        #splash-title { font-size: 42px; font-weight: 700; letter-spacing: 8px; text-transform: uppercase; color: var(--waze-blue); }
+        #splash-sub { font-size: 16px; letter-spacing: 4px; color: var(--muted); }
+        .loader { width: 200px; height: 4px; border-radius: 999px; overflow: hidden; background: #111; }
+        .loader-bar { height: 100%; width: 0; background: linear-gradient(to right, var(--waze-blue), var(--waze-cyan)); animation: load 1.8s ease forwards; }
+        @keyframes load { from { width: 0; } to { width: 100%; } }
+    </style>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+    <div id="splash">
+        <div id="splash-title">Waze HUD</div>
+        <div id="splash-sub">Meta Ray-Ban Display</div>
+        <div class="loader"><div class="loader-bar"></div></div>
+    </div>
+
+    <div id="app" style="display:none">
+        <div id="topbar">
+            <div id="logo">⬡ HUD NAV</div>
+            <div id="status-bar">
+                <div id="gps-dot"></div>
+                <span id="gps-text">SEARCHING...</span>
+                <span id="clock">--:--</span>
+            </div>
+        </div>
+
+        <div id="main">
+            <div id="map-container">
+                <div id="map"></div>
+            </div>
+
+            <div id="panel">
+                <div class="panel-section">
+                    <div class="label">Destination</div>
+                    <input id="destination-input" type="text" placeholder="Ex: Paris, Lyon..." />
+                    <button id="nav-btn">▶ Naviguer</button>
+                    <div id="hud-instruction"></div>
+                </div>
+                <div class="panel-section">
+                    <div class="label">Position</div>
+                    <div id="coords-display">
+                        <div id="lat-display">LAT: —</div>
+                        <div id="lon-display">LON: —</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let userLat = 48.8566;
+        let userLon = 2.3522;
+        let map, userMarker;
+        let isNavigating = false;
+
+        // Splash screen init
+        setTimeout(() => {
+            document.getElementById('splash').remove();
+            document.getElementById('app').style.display = 'flex';
+            initMap();
+            initGPS();
+        }, 1800);
+
+        // Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+        updateClock(); setInterval(updateClock, 10000);
+
+        // Carte Leaflet (Alternative à l'iframe bloquée de Waze)
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([userLat, userLon], 16);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            
+            // Icône personnalisée style cible/HUD
+            const hudIcon = L.divIcon({
+                className: 'hud-marker',
+                html: '<div style="width:16px; height:16px; background:#00ffcc; border:3px solid #fff; border-radius:50%; box-shadow: 0 0 8px #00ffcc;"></div>',
+                iconSize: [16, 16]
+            });
+
+            userMarker = L.marker([userLat, userLon], {icon: hudIcon}).addTo(map);
+        }
+
+        // GPS
+        function initGPS() {
+            if (!navigator.geolocation) {
+                document.getElementById('gps-text').textContent = 'NO GPS';
+                return;
+            }
+
+            navigator.geolocation.watchPosition(
+                position => {
+                    userLat = position.coords.latitude;
+                    userLon = position.coords.longitude;
+                    
+                    document.getElementById('gps-dot').classList.add('active');
+                    document.getElementById('gps-text').textContent = 'GPS OK';
+                    document.getElementById('lat-display').textContent = `LAT ${userLat.toFixed(5)}`;
+                    document.getElementById('lon-display').textContent = `LON ${userLon.toFixed(5)}`;
+                    
+                    const newPos = [userLat, userLon];
+                    userMarker.setLatLng(newPos);
+                    if (!isNavigating) {
+                        map.panTo(newPos);
+                    }
+                },
+                error => {
+                    document.getElementById('gps-text').textContent = 'GPS FAIL';
+                    document.getElementById('gps-dot').classList.remove('active');
+                },
+                { enableHighAccuracy: true, maximumAge: 1000 }
+            );
+        }
+
+        // Navigation simulée (Geocoding gratuit)
+        function navigate() {
+            const destination = document.getElementById('destination-input').value.trim();
+            if (!destination) return;
+
+            // Utilisation d'un service de geocoding public et gratuit (Nominatim)
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destination)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const destLat = parseFloat(data[0].lat);
+                        const destLon = parseFloat(data[0].lon);
+                        
+                        isNavigating = true;
+                        
+                        // Centre la carte entre la position actuelle et la destination
+                        const bounds = L.latLngBounds([userLat, userLon], [destLat, destLon]);
+                        map.fitBounds(bounds, { padding: [30, 30] });
+
+                        // Ajoute un marqueur de destination
+                        L.marker([destLat, destLon]).addTo(map)
+                            .bindPopup(destination).openPopup();
+
+                        // Simule l'affichage HUD de direction
+                        document.getElementById('hud-instruction').textContent = `➔ DIR. ${destination.toUpperCase()}`;
+                        
+                        const btn = document.getElementById('nav-btn');
+                        btn.textContent = '✓ EN ROUTE';
+                        btn.style.background = 'linear-gradient(135deg, #00ff99, #00ffcc)';
+                    } else {
+                        alert("Lieu introuvable");
+                    }
+                })
+                .catch(err => console.error("Erreur de guidage:", err));
+        }
+
+        document.getElementById('nav-btn').addEventListener('click', navigate);
+        document.getElementById('destination-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') { navigate(); }
+        });
+    </script>
+</body>
+</html>
     * {
       margin: 0;
       padding: 0;
