@@ -1,5 +1,5 @@
-
-   <!DOCTYPE html>
+            touch-action: manipulation;
+    <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
@@ -8,34 +8,56 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap');
-
-        :root {
-            --bg: #050709;
-            --surface: #10151b;
-            --surface2: #151d26;
-            --waze-blue: #00d4ff;
-            --waze-cyan: #00ffcc;
-            --text: #eef8ff;
-            --muted: #7d93a5;
-            --border: #223140;
-            --success: #00ff99;
-            --warning: #ffaa00;
-            --error: #ff4444;
-        }
-
+        :root { --bg: #050709; --surface: #10151b; --surface2: #151d26; --waze-blue: #00d4ff; --waze-cyan: #00ffcc; --text: #eef8ff; --muted: #7d93a5; --border: #223140; --success: #00ff99; --warning: #ffaa00; --error: #ff4444; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100vw; height: 100vh; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Rajdhani', sans-serif; font-size: 24px; touch-action: manipulation; zoom: 1.2; }
+        #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        #topbar { height: 65px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: var(--surface); border-bottom: 2px solid var(--border); }
+        #logo { font-size: 26px; font-weight: 700; letter-spacing: 4px; color: var(--waze-blue); }
+        #main { flex: 1; display: flex; min-height: 0; }
+        #map { flex: 1; background: #000; }
+        .leaflet-layer { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+        #panel { width: 320px; padding: 14px; background: var(--bg); border-left: 2px solid var(--border); }
+        #destination-input { width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--border); background: var(--surface2); color: var(--text); font-size: 20px; outline: none; }
+        #nav-btn { width: 100%; border: none; border-radius: 8px; padding: 14px; background: linear-gradient(135deg, var(--waze-blue), var(--waze-cyan)); color: #001018; font-weight: 700; cursor: pointer; text-transform: uppercase; margin-top: 10px; }
+    </style>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <div id="app">
+        <div id="topbar"><div id="logo">⬡ HUD NAV</div></div>
+        <div id="main">
+            <div id="map"></div>
+            <div id="panel">
+                <input id="destination-input" type="text" placeholder="Entrez la ville..." />
+                <button id="nav-btn" onclick="preparerNavigation()">RECHERCHER</button>
+            </div>
+        </div>
+    </div>
 
-        html, body {
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 24px;
-            -webkit-font-smoothing: antialiased;
-            touch-action: manipulation;
-            zoom: 1.2;
+    <script>
+        let targetCoords = null;
+        const map = L.map('map').setView([48.8566, 2.3522], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        function preparerNavigation() {
+            const dest = document.getElementById('destination-input').value;
+            const btn = document.getElementById('nav-btn');
+            btn.textContent = 'CALCUL...';
+
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dest)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        targetCoords = { lat: data[0].lat, lon: data[0].lon };
+                        btn.textContent = 'OUVRIR WAZE';
+                        btn.onclick = () => window.location.href = `waze://?ll=${targetCoords.lat},${targetCoords.lon}&navigate=yes`;
+                    }
+                });
+        }
+    </script>
+</body>
+</html>        zoom: 1.2;
         }
 
         body { display: flex; flex-direction: column; }
