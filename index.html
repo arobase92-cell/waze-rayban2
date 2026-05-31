@@ -1,41 +1,646 @@
-     <!DOCTYPE html>
+            text-rendering: optimizeLegibility;
+    <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <title>Waze HUD — Ray-Ban Display</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap');
+  <meta charset="UTF-8" />
 
-        :root {
-            --bg: #050709;
-            --surface: #10151b;
-            --surface2: #151d26;
-            --waze-blue: #00d4ff;
-            --waze-cyan: #00ffcc;
-            --text: #eef8ff;
-            --muted: #7d93a5;
-            --border: #223140;
-            --success: #00ff99;
+  <!-- META DISPLAY OPTIMIZED -->
+  <meta
+    name="viewport"
+    content="
+      width=device-width,
+      initial-scale=1,
+      maximum-scale=1,
+      user-scalable=no,
+      viewport-fit=cover
+    "
+  />
+
+  <title>Waze HUD — Ray-Ban Display</title>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap');
+
+    :root {
+      --bg: #050709;
+      --surface: #10151b;
+      --surface2: #151d26;
+
+      --waze-blue: #00d4ff;
+      --waze-cyan: #00ffcc;
+
+      --text: #eef8ff;
+      --muted: #7d93a5;
+
+      --border: #223140;
+      --success: #00ff99;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100vw;
+      height: 100vh;
+
+      overflow: hidden;
+
+      background: var(--bg);
+      color: var(--text);
+
+      font-family: 'Rajdhani', sans-serif;
+
+      /* IMPORTANT FOR META DISPLAY */
+      font-size: 28px;
+
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+
+      touch-action: manipulation;
+
+      zoom: 1.35;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* =========================
+       TOPBAR
+    ========================== */
+
+    #topbar {
+      height: 78px;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      padding: 0 22px;
+
+      background: var(--surface);
+
+      border-bottom: 2px solid var(--border);
+
+      flex-shrink: 0;
+    }
+
+    #logo {
+      font-size: 30px;
+      font-weight: 700;
+
+      letter-spacing: 4px;
+
+      color: var(--waze-blue);
+
+      text-transform: uppercase;
+    }
+
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+
+      font-size: 20px;
+
+      font-family: 'Share Tech Mono', monospace;
+
+      color: var(--muted);
+    }
+
+    #gps-dot {
+      width: 14px;
+      height: 14px;
+
+      border-radius: 50%;
+
+      background: #555;
+    }
+
+    #gps-dot.active {
+      background: var(--success);
+
+      box-shadow: 0 0 12px var(--success);
+    }
+
+    /* =========================
+       MAIN
+    ========================== */
+
+    #main {
+      flex: 1;
+
+      display: flex;
+
+      min-height: 0;
+    }
+
+    /* =========================
+       MAP
+    ========================== */
+
+    #map-container {
+      flex: 1;
+
+      position: relative;
+
+      overflow: hidden;
+
+      background: #000;
+    }
+
+    #map-container iframe {
+      width: 140%;
+      height: 140%;
+
+      border: none;
+
+      transform: scale(1.4);
+      transform-origin: top left;
+
+      filter:
+        contrast(1.15)
+        brightness(1.08)
+        saturate(1.15);
+    }
+
+    /* =========================
+       PANEL
+    ========================== */
+
+    #panel {
+      width: 340px;
+
+      display: flex;
+      flex-direction: column;
+
+      gap: 18px;
+
+      padding: 18px;
+
+      background: var(--bg);
+
+      border-left: 2px solid var(--border);
+
+      flex-shrink: 0;
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .label {
+      font-size: 18px;
+
+      letter-spacing: 2px;
+
+      color: var(--muted);
+
+      text-transform: uppercase;
+    }
+
+    #destination-input {
+      width: 100%;
+
+      padding: 16px;
+
+      border-radius: 12px;
+
+      border: 2px solid var(--border);
+
+      background: var(--surface2);
+
+      color: var(--text);
+
+      font-size: 24px;
+
+      font-family: 'Rajdhani', sans-serif;
+
+      outline: none;
+    }
+
+    #destination-input:focus {
+      border-color: var(--waze-blue);
+
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.35);
+    }
+
+    #destination-input::placeholder {
+      color: #6d7d8a;
+    }
+
+    #nav-btn {
+      width: 100%;
+
+      border: none;
+
+      border-radius: 12px;
+
+      padding: 18px;
+
+      background: linear-gradient(
+        135deg,
+        var(--waze-blue),
+        var(--waze-cyan)
+      );
+
+      color: #001018;
+
+      font-size: 24px;
+      font-weight: 700;
+
+      letter-spacing: 2px;
+
+      text-transform: uppercase;
+
+      cursor: pointer;
+
+      transition: transform 0.15s ease;
+    }
+
+    #nav-btn:active {
+      transform: scale(0.97);
+    }
+
+    #coords-display {
+      padding: 14px;
+
+      border-radius: 12px;
+
+      background: var(--surface);
+
+      border: 2px solid var(--border);
+
+      font-size: 18px;
+
+      line-height: 1.8;
+
+      font-family: 'Share Tech Mono', monospace;
+
+      color: var(--waze-cyan);
+    }
+
+    /* =========================
+       SPLASH
+    ========================== */
+
+    #splash {
+      position: fixed;
+
+      inset: 0;
+
+      background: var(--bg);
+
+      display: flex;
+      flex-direction: column;
+
+      align-items: center;
+      justify-content: center;
+
+      gap: 24px;
+
+      z-index: 100;
+    }
+
+    #splash-title {
+      font-size: 48px;
+
+      font-weight: 700;
+
+      letter-spacing: 8px;
+
+      text-transform: uppercase;
+
+      color: var(--waze-blue);
+    }
+
+    #splash-sub {
+      font-size: 18px;
+
+      letter-spacing: 4px;
+
+      color: var(--muted);
+    }
+
+    .loader {
+      width: 220px;
+      height: 6px;
+
+      border-radius: 999px;
+
+      overflow: hidden;
+
+      background: #111;
+    }
+
+    .loader-bar {
+      height: 100%;
+
+      width: 0;
+
+      background: linear-gradient(
+        to right,
+        var(--waze-blue),
+        var(--waze-cyan)
+      );
+
+      animation: load 1.8s ease forwards;
+    }
+
+    @keyframes load {
+      from {
+        width: 0;
+      }
+      to {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- SPLASH -->
+
+  <div id="splash">
+    <div id="splash-title">Waze HUD</div>
+
+    <div id="splash-sub">
+      Meta Ray-Ban Display
+    </div>
+
+    <div class="loader">
+      <div class="loader-bar"></div>
+    </div>
+  </div>
+
+  <!-- APP -->
+
+  <div id="app" style="display:none">
+
+    <!-- TOPBAR -->
+
+    <div id="topbar">
+
+      <div id="logo">
+        ⬡ WAZE
+      </div>
+
+      <div id="status-bar">
+
+        <div id="gps-dot"></div>
+
+        <span id="gps-text">
+          GPS...
+        </span>
+
+        <span id="clock">
+          --:--
+        </span>
+
+      </div>
+    </div>
+
+    <!-- MAIN -->
+
+    <div id="main">
+
+      <!-- MAP -->
+
+      <div id="map-container">
+
+        <iframe
+          id="waze-frame"
+          src="https://embed.waze.com/fr/iframe?zoom=16&lat=48.8566&lon=2.3522&pin=0"
+          allowfullscreen>
+        </iframe>
+
+      </div>
+
+      <!-- PANEL -->
+
+      <div id="panel">
+
+        <div class="panel-section">
+
+          <div class="label">
+            Destination
+          </div>
+
+          <input
+            id="destination-input"
+            type="text"
+            placeholder="Adresse ou lieu..." />
+
+          <button id="nav-btn">
+            ▶ Naviguer
+          </button>
+
+        </div>
+
+        <div class="panel-section">
+
+          <div class="label">
+            Position
+          </div>
+
+          <div id="coords-display">
+
+            <div id="lat-display">
+              —
+            </div>
+
+            <div id="lon-display">
+              —
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+
+    let userLat = 48.8566;
+    let userLon = 2.3522;
+
+    // =========================
+    // SPLASH
+    // =========================
+
+    setTimeout(() => {
+
+      document.getElementById('splash').style.display = 'none';
+
+      document.getElementById('app').style.display = 'flex';
+
+      initGPS();
+
+    }, 1800);
+
+    // =========================
+    // CLOCK
+    // =========================
+
+    function updateClock() {
+
+      const now = new Date();
+
+      const hh =
+        String(now.getHours()).padStart(2, '0');
+
+      const mm =
+        String(now.getMinutes()).padStart(2, '0');
+
+      document.getElementById('clock').textContent =
+        `${hh}:${mm}`;
+    }
+
+    updateClock();
+
+    setInterval(updateClock, 10000);
+
+    // =========================
+    // GPS
+    // =========================
+
+    function initGPS() {
+
+      if (!navigator.geolocation) {
+
+        document.getElementById('gps-text').textContent =
+          'NO GPS';
+
+        return;
+      }
+
+      navigator.geolocation.watchPosition(
+
+        position => {
+
+          userLat = position.coords.latitude;
+          userLon = position.coords.longitude;
+
+          document
+            .getElementById('gps-dot')
+            .classList.add('active');
+
+          document.getElementById('gps-text').textContent =
+            'GPS OK';
+
+          document.getElementById('lat-display').textContent =
+            `LAT ${userLat.toFixed(5)}`;
+
+          document.getElementById('lon-display').textContent =
+            `LON ${userLon.toFixed(5)}`;
+
+          updateMap(userLat, userLon);
+
+        },
+
+        error => {
+
+          document.getElementById('gps-text').textContent =
+            'GPS FAIL';
+
+          console.error(error);
+
+        },
+
+        {
+          enableHighAccuracy: true,
+          maximumAge: 1000,
+          timeout: 10000
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+      );
+    }
+
+    // =========================
+    // MAP
+    // =========================
+
+    function updateMap(lat, lon, destination) {
+
+      let src;
+
+      if (destination) {
+
+        src =
+          `https://embed.waze.com/fr/iframe?zoom=15&lat=${lat}&lon=${lon}&pin=1&navigate=yes&to=${encodeURIComponent(destination)}`;
+
+      } else {
+
+        src =
+          `https://embed.waze.com/fr/iframe?zoom=16&lat=${lat}&lon=${lon}&pin=0`;
+      }
+
+      document.getElementById('waze-frame').src = src;
+    }
+
+    // =========================
+    // NAVIGATION
+    // =========================
+
+    function navigate() {
+
+      const destination =
+        document
+          .getElementById('destination-input')
+          .value
+          .trim();
+
+      if (!destination) return;
+
+      updateMap(userLat, userLon, destination);
+
+      const btn =
+        document.getElementById('nav-btn');
+
+      btn.textContent = '✓ EN ROUTE';
+
+      btn.style.background =
+        'linear-gradient(135deg,#00ff99,#00ffcc)';
+    }
+
+    document
+      .getElementById('nav-btn')
+      .addEventListener('click', navigate);
+
+    document
+      .getElementById('destination-input')
+      .addEventListener('keydown', e => {
+
+        if (e.key === 'Enter') {
+          navigate();
         }
 
-        html, body {
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 24px; /* Légèrement réduit pour compenser le zoom */
-            -webkit-font-smoothing: antialiased;
-            text-rendering: optimizeLegibility;
-            touch-action: manipulation;
+      });
+
+  </script>
+
+</body>
+</html>        touch-action: manipulation;
             zoom: 1.2; /* Adapté pour micro-display */
         }
 
