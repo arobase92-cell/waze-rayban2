@@ -3,38 +3,15 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Waze HUD Navigator</title>
+    <title>Waze HUD Pro</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
-        
         #app-wrapper { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
-        
-        #map { height: 60vh; width: 100%; }
-        
-        #controls { height: 40vh; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
-        
-        input { 
-            padding: 30px; 
-            font-size: 28px; 
-            border-radius: 15px; 
-            border: 2px solid #555; 
-            background: #222;
-            color: white;
-            width: 100%;
-        }
-        
-        button, #btn-link-container { 
-            padding: 30px; 
-            font-size: 32px; 
-            border-radius: 15px; 
-            border: none; 
-            background: #00d4ff; 
-            font-weight: bold; 
-            text-align: center;
-            cursor: pointer;
-        }
-        
+        #map { height: 50vh; width: 100%; }
+        #controls { height: 50vh; padding: 25px; display: flex; flex-direction: column; gap: 20px; }
+        input { padding: 30px; font-size: 28px; border-radius: 15px; border: 2px solid #555; background: #222; color: white; width: 100%; }
+        button { padding: 30px; font-size: 32px; border-radius: 15px; border: none; background: #00d4ff; font-weight: bold; cursor: pointer; text-align: center; }
         a { color: #000; text-decoration: none; display: block; width: 100%; height: 100%; }
     </style>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -54,11 +31,19 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         let marker = null;
 
+        function envoyerNotif(message) {
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("HUD NAV", { body: message });
+            } else if (Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
+        }
+
         function processAction() {
             const btn = document.getElementById('actionBtn');
             const address = document.getElementById('addressInput').value;
 
-            if (!address) return alert("Veuillez entrer une adresse");
+            if (!address) return;
 
             btn.textContent = "CALCUL...";
 
@@ -73,9 +58,12 @@
                     if (marker) map.removeLayer(marker);
                     marker = L.marker([lat, lon]).addTo(map);
                     
-                    // Transformation du bouton en lien cliquable pour Waze
+                    // Envoi vers le système de notification (HUD)
+                    envoyerNotif("Navigation vers : " + address);
+                    
+                    // Transformation du bouton en lien universel Waze
                     btn.style.background = "#00ff99";
-                    btn.innerHTML = `<a href="waze://?ll=${lat},${lon}&navigate=yes">LANCER WAZE</a>`;
+                    btn.innerHTML = `<a href="https://waze.com/ul?ll=${lat},${lon}&navigate=yes">LANCER WAZE</a>`;
                 } else {
                     alert("Adresse non trouvée");
                     btn.textContent = "CHERCHER";
