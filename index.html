@@ -1,74 +1,127 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Waze Navigation</title>
-    <style>
-        /* Réinitialisation complète pour éviter les zooms intempestifs */
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #000;
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-        }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>HUD Navigation</title>
 
-        /* Zone de saisie fixe et bien visible */
-        #search-container {
-            height: 60px;
-            width: 100%;
-            padding: 10px;
-            box-sizing: border-box;
-            background: #222;
-        }
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: Arial, sans-serif;
+    color: white;
+    touch-action: manipulation;
+}
 
-        #destination-input {
-            width: 100%;
-            height: 40px;
-            font-size: 18px;
-            border-radius: 8px;
-            border: 1px solid #444;
-            padding: 5px;
-            background: #fff;
-            color: #000;
-        }
+/* HUD container */
+#hud {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
 
-        /* Zone de navigation */
-        #map-view {
-            flex-grow: 1;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-        }
-    </style>
+/* Top bar */
+#topbar {
+    height: 70px;
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #111;
+    box-sizing: border-box;
+}
+
+/* Input */
+#destination {
+    flex: 1;
+    height: 45px;
+    font-size: 16px; /* important anti-zoom mobile */
+    border: none;
+    border-radius: 10px;
+    padding: 10px;
+    outline: none;
+}
+
+/* Button */
+#goBtn {
+    margin-left: 10px;
+    height: 45px;
+    padding: 0 15px;
+    border: none;
+    border-radius: 10px;
+    background: #00c853;
+    color: black;
+    font-weight: bold;
+}
+
+/* Main display */
+#screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 14px;
+    color: #666;
+}
+</style>
 </head>
+
 <body>
 
-    <div id="search-container">
-        <input type="text" id="destination-input" placeholder="Saisir destination..." onkeydown="handleEnter(event)">
+<div id="hud">
+
+    <div id="topbar">
+        <input id="destination" placeholder="Destination..." />
+        <button id="goBtn">GO</button>
     </div>
 
-    <div id="map-view">
-        <div>Carte en attente de navigation...</div>
+    <div id="screen">
+        En attente de navigation...
     </div>
 
-    <script>
-        function handleEnter(event) {
-            if (event.key === 'Enter') {
-                const dest = document.getElementById('destination-input').value;
-                // Lien universel Waze qui force l'ouverture de l'app native
-                window.location.href = `waze://?q=${encodeURIComponent(dest)}&navigate=yes`;
-            }
-        }
-    </script>
+</div>
+
+<script>
+const input = document.getElementById("destination");
+const btn = document.getElementById("goBtn");
+
+function launchNavigation() {
+    const dest = input.value.trim();
+    if (!dest) return;
+
+    // Deep link app Waze
+    const appLink = `waze://?q=${encodeURIComponent(dest)}&navigate=yes`;
+
+    // Web fallback (toujours fiable)
+    const webLink = `https://waze.com/ul?q=${encodeURIComponent(dest)}&navigate=yes`;
+
+    // tentative ouverture app
+    window.location.href = appLink;
+
+    // fallback automatique si bloqué (WebView / lunettes / navigateur limité)
+    setTimeout(() => {
+        window.location.href = webLink;
+    }, 1200);
+
+    document.getElementById("screen").innerText = "Navigation vers : " + dest;
+}
+
+// Click bouton
+btn.addEventListener("click", launchNavigation);
+
+// Enter clavier
+input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        launchNavigation();
+    }
+});
+</script>
+
 </body>
 </html>
