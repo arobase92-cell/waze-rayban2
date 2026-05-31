@@ -2,75 +2,34 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>HUD Waze Vocale</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HUD Waze</title>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; }
-        #app { padding: 40px; display: flex; flex-direction: column; gap: 40px; justify-content: center; height: 100%; }
-        
-        /* Zone de texte géante pour les lunettes */
-        textarea { 
-            width: 100%; padding: 40px; font-size: 35px; background: #222; 
-            color: #fff; border: 6px solid #00d4ff; border-radius: 20px; 
-            resize: none; box-sizing: border-box;
+        body { margin: 0; background: #000; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; }
+        /* Zone de saisie énorme pour être sûr de pouvoir cliquer dessus avec les lunettes */
+        input { 
+            width: 90%; padding: 60px; font-size: 50px; 
+            border: 10px solid #00d4ff; background: #222; color: #fff; 
+            border-radius: 30px; text-align: center;
         }
-        
         button { 
-            padding: 50px; font-size: 40px; border-radius: 20px; 
-            border: none; font-weight: bold; cursor: pointer; color: #000;
+            margin-top: 40px; width: 90%; padding: 60px; font-size: 50px; 
+            background: #00d4ff; border: none; border-radius: 30px; font-weight: bold;
         }
-        
-        #voiceBtn { background: #ffcc00; }
-        #searchBtn { background: #00d4ff; }
-        a { text-decoration: none; color: #000; display: block; width: 100%; }
     </style>
 </head>
 <body>
-    <div id="app">
-        <textarea id="addressInput" placeholder="DESTINATION..."></textarea>
-        
-        <button id="voiceBtn" onclick="startDictation()">🎤 DICTER DESTINATION</button>
-        
-        <button id="searchBtn" onclick="chercher()">CHERCHER L'ITINÉRAIRE</button>
-    </div>
+
+    <input type="text" id="addressInput" speech x-webkit-speech placeholder="CLIQUEZ ICI POUR PARLER" />
+    
+    <button id="searchBtn" onclick="chercher()">CHERCHER</button>
 
     <script>
-        function startDictation() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                alert("Votre navigateur ne supporte pas la dictée vocale.");
-                return;
-            }
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'fr-FR';
-            
-            // Le résultat est envoyé dans la zone de texte
-            recognition.onresult = (event) => {
-                document.getElementById('addressInput').value = event.results[0][0].transcript;
-            };
-            
-            recognition.start();
-        }
-
         function chercher() {
             const addr = document.getElementById('addressInput').value;
-            if (!addr) return alert("Veuillez d'abord dicter une adresse.");
-            
-            const btn = document.getElementById('searchBtn');
-            btn.textContent = "RECHERCHE...";
-
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.length > 0) {
-                    const url = `https://waze.com/ul?ll=${data[0].lat},${data[0].lon}&navigate=yes`;
-                    btn.style.background = "#00ff99";
-                    btn.innerHTML = `<a href="${url}">LANCER WAZE</a>`;
-                } else {
-                    alert("Adresse non trouvée.");
-                    btn.textContent = "CHERCHER";
-                }
-            });
+            if (!addr) return;
+            // Redirection directe vers Waze
+            window.location.href = `https://waze.com/ul?q=${encodeURIComponent(addr)}&navigate=yes`;
         }
     </script>
 </body>
