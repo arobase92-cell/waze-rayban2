@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Universal Navigation Router</title>
+<title>Navigation Simple</title>
 
 <style>
 html, body {
@@ -11,20 +11,20 @@ html, body {
     padding: 0;
     height: 100%;
     width: 100%;
-    background: #000;
+    background: black;
     font-family: Arial, sans-serif;
     overflow: hidden;
     color: white;
     touch-action: manipulation;
 }
 
-#app {
+#container {
     display: flex;
     flex-direction: column;
     height: 100%;
 }
 
-#bar {
+#top {
     display: flex;
     padding: 10px;
     background: #111;
@@ -44,35 +44,35 @@ html, body {
 #btn {
     margin-left: 10px;
     padding: 0 15px;
-    border: none;
     border-radius: 10px;
+    border: none;
     background: #00e676;
     font-weight: bold;
 }
 
-#status {
+#screen {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #666;
     text-align: center;
     font-size: 14px;
+    color: #666;
 }
 </style>
 </head>
 
 <body>
 
-<div id="app">
+<div id="container">
 
-    <div id="bar">
+    <div id="top">
         <input id="input" placeholder="Destination..." />
         <button id="btn">GO</button>
     </div>
 
-    <div id="status">
-        En attente de navigation...
+    <div id="screen">
+        Tape une destination puis GO
     </div>
 
 </div>
@@ -80,89 +80,28 @@ html, body {
 <script>
 const input = document.getElementById("input");
 const btn = document.getElementById("btn");
-const status = document.getElementById("status");
+const screen = document.getElementById("screen");
 
-// -----------------------------
-// DEVICE DETECTION SIMPLE
-// -----------------------------
-function isIOS() {
-    return /iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-function isAndroid() {
-    return /Android/i.test(navigator.userAgent);
-}
-
-function isWebView() {
-    return /(WebView|wv)/i.test(navigator.userAgent);
-}
-
-// -----------------------------
-// NAVIGATION ENGINE
-// -----------------------------
-function buildLinks(dest) {
-    const encoded = encodeURIComponent(dest);
-
-    return {
-        wazeApp: `waze://?q=${encoded}&navigate=yes`,
-        googleMapsApp: `google.navigation:q=${encoded}`,
-        appleMaps: `http://maps.apple.com/?q=${encoded}`,
-        webFallback: `https://waze.com/ul?q=${encoded}&navigate=yes`,
-        googleWeb: `https://www.google.com/maps/search/?api=1&query=${encoded}`
-    };
-}
-
-function launchNavigation() {
+function navigate() {
     const dest = input.value.trim();
     if (!dest) return;
 
-    const links = buildLinks(dest);
+    // 🚨 IMPORTANT : seul format fiable partout
+    const url = "https://www.google.com/maps/dir/?api=1&destination=" 
+                + encodeURIComponent(dest);
 
-    status.innerText = "Recherche : " + dest;
+    screen.innerText = "Navigation vers : " + dest;
 
-    // -----------------------------
-    // SMART ROUTING
-    // -----------------------------
-
-    // 1. iOS
-    if (isIOS() && !isWebView()) {
-        window.location.href = links.appleMaps;
-
-        setTimeout(() => {
-            window.location.href = links.googleWeb;
-        }, 1200);
-        return;
-    }
-
-    // 2. Android natif
-    if (isAndroid() && !isWebView()) {
-        window.location.href = links.wazeApp;
-
-        setTimeout(() => {
-            window.location.href = links.googleWeb;
-        }, 1200);
-        return;
-    }
-
-    // 3. WebView / lunettes / frigo / environnements bloqués
-    if (isWebView()) {
-        window.location.href = links.webFallback;
-        return;
-    }
-
-    // 4. Desktop fallback
-    window.location.href = links.googleWeb;
+    // ouverture universelle (aucun store, aucun Waze)
+    window.location.href = url;
 }
 
-// -----------------------------
-// EVENTS
-// -----------------------------
-btn.addEventListener("click", launchNavigation);
+btn.addEventListener("click", navigate);
 
 input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
         e.preventDefault();
-        launchNavigation();
+        navigate();
     }
 });
 </script>
