@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waze Ray-Ban 2 - HUD Edition</title>
+    <title>Waze Ray-Ban 2 - HUD Neural Edition</title>
     
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl-js.js"></script>
 
     <style>
-        /* Style général optimisé pour un affichage tête haute (HUD) Meta Display */
+        /* Design HUD Haute Visibilité optimisé pour Meta Display (Fond noir = pixels éteints) */
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #000000; /* Fond noir pour éteindre les pixels inutiles sur les lunettes */
+            background-color: #000000;
             font-family: 'Consolas', 'Courier New', monospace;
             overflow: hidden;
-            color: #00ffcc; /* Vert fluo / Cyan pour un contraste maximal en extérieur */
+            color: #00ffcc; /* Cyan/Vert fluo pour l'extérieur */
         }
 
         #map {
@@ -27,25 +27,27 @@
             bottom: 0;
             width: 100%;
             height: 100%;
-            opacity: 0.85; /* Légère transparence pour fusionner avec la réalité */
+            opacity: 0.80; /* Fusionne la carte avec l'environnement réel */
         }
 
-        /* Conteneurs de l'interface utilisateur HUD */
-        .hud-overlay {
+        /* Overlay HUD */
+        .hud-container {
             position: absolute;
             top: 15px;
             left: 15px;
             right: 15px;
-            z-index: 10;
-            pointer-events: none; /* Laisse passer les interactions vers la carte si nécessaire */
+            bottom: 20px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .search-box {
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.9);
             border: 2px solid #00ffcc;
             border-radius: 6px;
-            padding: 10px 15px;
-            display: block;
+            padding: 12px;
             pointer-events: auto;
         }
 
@@ -59,45 +61,47 @@
             outline: none;
         }
 
-        .search-box input::placeholder {
-            color: rgba(0, 255, 204, 0.5);
-        }
-
-        /* Indicateur d'état du Micro (Dictée Vocale) */
+        /* Indicateur d'enregistrement Micro */
         .mic-indicator {
-            position: absolute;
-            top: 80px;
-            right: 15px;
+            align-self: flex-end;
+            margin-top: 10px;
             background: rgba(0, 0, 0, 0.9);
             border: 2px solid #ff3333;
             color: #ff3333;
             padding: 8px 12px;
             border-radius: 4px;
             font-weight: bold;
-            display: none; /* Caché par défaut */
-            animation: pulse 1.5s infinite;
-            z-index: 11;
+            display: none;
+            animation: pulse 1.2s infinite;
         }
 
-        @keyframes pulse {
-            0% { opacity: 0.6; }
-            50% { opacity: 1; }
-            100% { opacity: 0.6; }
-        }
-
-        /* Instructions système en bas de l'écran */
-        .hud-status {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid #00ffcc;
+        /* Outil de debug du Neural Band intégré au HUD */
+        .debug-panel {
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px dashed #ffaa00;
+            color: #ffaa00;
             padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-top: 10px;
+            align-self: flex-start;
+        }
+
+        /* Barre de statut inférieure */
+        .hud-status {
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #00ffcc;
+            padding: 8px 15px;
             border-radius: 4px;
             font-size: 12px;
             text-align: center;
-            z-index: 10;
+            align-self: center;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
         }
     </style>
 </head>
@@ -105,42 +109,50 @@
 
     <div id="map"></div>
 
-    <div class="hud-overlay">
-        <div class="search-box">
-            <input type="text" id="search-input" placeholder="[ Geste Neural Band pour dicter ]" readonly>
+    <div class="hud-container">
+        <div>
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="[ En attente du geste Neural ]" readonly>
+            </div>
+            
+            <div id="mic-indicator" class="mic-indicator">• MICRO ACTIF / PARLEZ</div>
+            
+            <div id="debug-panel" class="debug-panel">DERNIER GESTE DÉTECTÉ : AUCUN (Faites un geste pour tester)</div>
         </div>
+
+        <div class="hud-status" id="hud-status">NEURAL SYSTEM : READY</div>
     </div>
 
-    <div id="mic-indicator" class="mic-indicator">• ENREGISTREMENT VOCAL...</div>
-
-    <div class="hud-status" id="hud-status">NEURAL BAND : PRÊT | EN ATTENTE DE GESTE</div>
-
     <script>
-        // TO-DO: Remplacer par votre propre token Mapbox actif
+        // CONFIGURATION : Mettez votre clé Mapbox ici
         mapboxgl.accessToken = 'VOTRE_TOKEN_MAPBOX_ICI';
 
-        // Initialisation de la carte optimisée pour le HUD (Style sombre / Dark)
+        // Variable clé pour le déclenchement (Modifiez 'Enter' si votre bracelet envoie autre chose)
+        const DECLENCHEUR_NEURAL = 'Enter'; 
+
+        // Initialisation de la carte (Style Dark pour économie d'énergie et lisibilité Meta Display)
         const map = new mapboxgl.Map({
             container: 'map',
             style: 'mapbox://styles/mapbox/dark-v11', 
-            center: [2.3522, 48.8566], // Centré par défaut sur Paris
-            zoom: 13,
-            pitch: 45, // Vue en perspective type navigation de conduite
+            center: [2.3522, 48.8566], // Paris par défaut
+            zoom: 14,
+            pitch: 50,
             bearing: 0
         });
 
-        // Ajouter un marqueur de position globale
-        const navigationMarker = new mapboxgl.Marker({ color: '#00ffcc' })
+        // Marqueur de position de navigation
+        const navMarker = new mapboxgl.Marker({ color: '#00ffcc' })
             .setLngLat([2.3522, 48.8566])
             .addTo(map);
 
-        // Variables pour la reconnaissance vocale
+        // Éléments du DOM
         const searchInput = document.getElementById('search-input');
         const micIndicator = document.getElementById('mic-indicator');
+        const debugPanel = document.getElementById('debug-panel');
         const hudStatus = document.getElementById('hud-status');
         let isListening = false;
 
-        // Configuration de l'API Web Speech
+        // Configuration du moteur de dictée vocale (Web Speech API)
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition;
 
@@ -153,90 +165,87 @@
             recognition.onstart = () => {
                 isListening = true;
                 micIndicator.style.display = 'block';
-                hudStatus.innerText = "DICTÉE EN COURS... PARLEZ NOW";
-                hudStatus.style.borderColor = "#ff3333";
+                hudStatus.innerText = "ÉCOUTE EN COURS...";
                 hudStatus.style.color = "#ff3333";
-                searchInput.placeholder = "Écoute en cours...";
+                hudStatus.style.borderColor = "#ff3333";
             };
 
             recognition.onresult = (event) => {
-                const resultText = event.results[0][0].transcript;
-                searchInput.value = resultText;
-                hudStatus.innerText = "RECHERCHE : " + resultText.toUpperCase();
-                
-                // Lancer la recherche d'itinéraire / géocodage sur Mapbox
-                executerGeocodage(resultText);
+                const texteDicte = event.results[0][0].transcript;
+                searchInput.value = texteDicte;
+                hudStatus.innerText = "RECHERCHE : " + texteDicte.toUpperCase();
+                lancerRechercheDestination(texteDicte);
             };
 
             recognition.onerror = (event) => {
-                console.error("Erreur Speech:", event.error);
-                hudStatus.innerText = "ERREUR DE DICTÉE : " + event.error.toUpperCase();
-                resetHUDStatusDelayed();
+                hudStatus.innerText = "ERREUR DICTÉE : " + event.error.toUpperCase();
+                resetHUDDelayed();
             };
 
             recognition.onend = () => {
                 isListening = false;
                 micIndicator.style.display = 'none';
-                searchInput.placeholder = "[ Geste Neural Band pour dicter ]";
-                resetHUDStatusDelayed();
+                resetHUDDelayed();
             };
         } else {
-            hudStatus.innerText = "ERREUR : WEB SPEECH API NON SUPPORTÉE";
+            hudStatus.innerText = "ERREUR : NAVIGATEUR NON COMPATIBLE MICRO";
         }
 
-        // --- GESTION DU NEURAL BAND ---
-        // Le bracelet traduit vos mouvements musculaires/nerveux en événements claviers (ex: Touche Entrée / Raccourci)
+        // --- INTERCEPTION DU NEURAL BAND + DÉTECTEUR DE TOUCHES ---
         window.addEventListener('keydown', (event) => {
-            // AJUSTEMENT : Remplacez 'Enter' par la touche émise par votre configuration Neural Band
-            // Si le bracelet envoie un signal spécifique pour "Actionner le micro"
-            if (event.key === 'Enter') { 
-                event.preventDefault(); // Empêche le comportement par défaut d'Android
+            // Affiche immédiatement la touche reçue sur l'écran pour que vous puissiez voir le code du geste
+            debugPanel.innerText = `DERNIER GESTE DÉTECTÉ : Code = "${event.key}"`;
+            debugPanel.style.color = "#00ffcc";
+            debugPanel.style.borderColor = "#00ffcc";
+
+            // Si la touche correspond à votre déclencheur configuré
+            if (event.key === DECLENCHEUR_NEURAL) {
+                event.preventDefault(); // Bloque l'action Android par défaut
                 
                 if (!isListening && recognition) {
                     recognition.start();
                 }
             }
+
+            // Réinitialise la couleur du panneau de debug après 2 secondes
+            setTimeout(() => {
+                debugPanel.style.color = "#ffaa00";
+                debugPanel.style.borderColor = "#ffaa00";
+            }, 2000);
         });
 
-        // Fonction pour géocoder l'adresse dictée via l'API Mapbox
-        function executerGeocodage(query) {
+        // Liaison avec l'API Geocoding de Mapbox pour déplacer la carte
+        function lancerRechercheDestination(query) {
             const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=FR&limit=1`;
 
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.features && data.features.length > 0) {
-                        const coordinates = data.features[0].geometry.coordinates;
-                        const placeName = data.features[0].place_name;
+                        const coords = data.features[0].geometry.coordinates;
+                        const nomLieu = data.features[0].place_name;
 
-                        // Centrer la carte sur la destination trouvée
-                        map.flyTo({
-                            center: coordinates,
-                            zoom: 15,
-                            essential: true
-                        });
-
-                        // Déplacer le marqueur
-                        navigationMarker.setLngLat(coordinates);
-                        hudStatus.innerText = "DESTINATION : " + placeName.toUpperCase();
+                        // Animation fluide vers la destination
+                        map.flyTo({ center: coords, zoom: 15, essential: true });
+                        navMarker.setLngLat(coords);
+                        hudStatus.innerText = "NAV VERS : " + nomLieu.toUpperCase();
                     } else {
                         hudStatus.innerText = "DESTINATION INTROUVABLE";
                     }
                 })
                 .catch(err => {
-                    console.error("Erreur Geocoding:", err);
                     hudStatus.innerText = "ERREUR RÉSEAU MAPBOX";
                 });
         }
 
-        function resetHUDStatusDelayed() {
+        function resetHUDDelayed() {
             setTimeout(() => {
                 if (!isListening) {
-                    hudStatus.innerText = "NEURAL BAND : PRÊT | EN ATTENTE DE GESTE";
-                    hudStatus.style.borderColor = "#00ffcc";
+                    hudStatus.innerText = "NEURAL SYSTEM : READY";
                     hudStatus.style.color = "#00ffcc";
+                    hudStatus.style.borderColor = "#00ffcc";
                 }
-            }, 4000);
+            }, 3500);
         }
     </script>
 </body>
